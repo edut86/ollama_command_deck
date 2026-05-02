@@ -1005,7 +1005,8 @@ def stream_chat_events(payload: dict[str, Any]):
             agent_text = text[len("/agent "):].strip() if text.startswith("/agent ") else text
             agent_messages = messages[:-1] + [{"role": "user", "content": agent_text}]
             final_event: dict[str, Any] = {}
-            for event in stream_langchain_agent_events(model, agent_messages, keep_alive=keep_alive):
+            tool_rounds = 10 if context_selection.active_profile == "builder" else 4
+            for event in stream_langchain_agent_events(model, agent_messages, max_tool_rounds=tool_rounds, keep_alive=keep_alive):
                 if event["type"] == "cmd":
                     yield {"type": "cmd", "command": event["command"]}
                 elif event["type"] == "final":
@@ -1157,7 +1158,12 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             agent_text = text[len("/agent "):].strip() if text.startswith("/agent ") else text
             agent_messages = messages[:-1] + [{"role": "user", "content": agent_text}]
-            answer, stats, commands = invoke_langchain_agent_with_trace(model, agent_messages, keep_alive=keep_alive)
+            answer, stats, commands = invoke_langchain_agent_with_trace(
+                model,
+                agent_messages,
+                max_tool_rounds=10 if agent_profile == "builder" else 4,
+                keep_alive=keep_alive,
+            )
             return {
                 "ok": True,
                 "role": "Agent",

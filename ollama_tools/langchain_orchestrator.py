@@ -28,6 +28,13 @@ class LangChainUnavailableError(RuntimeError):
     """Raised when optional LangChain packages are not installed."""
 
 
+FINAL_SUMMARY_PROMPT = (
+    "Tool budget reached. Do not call any more tools and do not emit tool-call markup. "
+    "Using only the tool outputs already provided, answer the user's request. If you only have partial evidence, "
+    "say that plainly, summarize what you inspected, and list the next specific command you would run."
+)
+
+
 def describe_tool_call(tool_name: str | None, tool_args: dict[str, Any]) -> str:
     if tool_name == "ssh_command":
         host = tool_args.get("host", "")
@@ -210,11 +217,26 @@ def _stats_from_response(response: object) -> ChatStats | None:
 def _fallback_answer_from_tool_results(tool_results: list[str]) -> str:
     """Build a visible answer if the model exhausts tool rounds without final text."""
     search_items: list[dict[str, str]] = []
+    command_items: list[dict[str, str]] = []
     for raw in tool_results:
         try:
             data = json.loads(raw)
         except Exception:
             continue
+        if isinstance(data, dict) and "command" in data:
+            stdout = str(data.get("stdout") or "").strip()
+            stderr = str(data.get("stderr") or "").strip()
+            preview = stdout or stderr or "(no output)"
+            preview = re.sub(r"\s+", " ", preview).strip()
+            if len(preview) > 220:
+                preview = preview[:217].rstrip() + "..."
+            command_items.append(
+                {
+                    "command": str(data.get("command") or ""),
+                    "returncode": str(data.get("returncode", "")),
+                    "preview": preview.replace("|", "\\|"),
+                }
+            )
         if isinstance(data, list):
             for item in data:
                 if isinstance(item, dict) and item.get("title"):
@@ -237,6 +259,24 @@ def _fallback_answer_from_tool_results(tool_results: list[str]) -> str:
             lines.append(f"- {item['title']}: {item['url']}{snippet}")
             if len(lines) >= 8:
                 break
+        return "\n".join(lines)
+
+    if command_items:
+        lines = [
+            "I ran out of tool rounds before the model produced a final narrative. Here is the evidence gathered so far:",
+            "",
+            "| Command | Return code | Key output |",
+            "|---|---:|---|",
+        ]
+        for item in command_items[-6:]:
+            lines.append(f"| `{item['command']}` | {item['returncode']} | {item['preview']} |")
+        lines.extend(
+            [
+                "",
+                "Partial read: the agent inspected the repository structure and project metadata, but stopped before choosing or applying a code change.",
+                "Next run should use the Builder profile with a larger tool budget, or ask for a narrower target file.",
+            ]
+        )
         return "\n".join(lines)
 
     if tool_results:
@@ -338,7 +378,7 @@ def invoke_langchain_agent(
                 return text, _stats_from_response(response)
             # Thinking model produced no visible text — ask for a plain summary
             lc_messages.append(response)
-            lc_messages.append(HumanMessage(content="Please summarise your findings in plain text."))
+            lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
             response = llm.invoke(lc_messages)
             text = _extract_text(response.content)
             if text == "(no response)":
@@ -355,10 +395,12 @@ def invoke_langchain_agent(
         response = llm.invoke(lc_messages)
 
     text = _extract_text(response.content)
+    if _pseudo_tool_call_from_text(text, tool_map):
+        text = "(no response)"
     if text != "(no response)":
         return text, _stats_from_response(response)
     lc_messages.append(response)
-    lc_messages.append(HumanMessage(content="Please summarise your findings in plain text."))
+    lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
     response = llm.invoke(lc_messages)
     text = _extract_text(response.content)
     if text == "(no response)":
@@ -435,7 +477,7 @@ def stream_langchain_agent_events(
                 yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
                 return
             lc_messages.append(response)
-            lc_messages.append(HumanMessage(content="Please summarise your findings in plain text."))
+            lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
             response = llm.invoke(lc_messages)
             text = _extract_text(response.content)
             if text == "(no response)":
@@ -455,11 +497,13 @@ def stream_langchain_agent_events(
         response = llm.invoke(lc_messages)
 
     text = _extract_text(response.content)
+    if _pseudo_tool_call_from_text(text, tool_map):
+        text = "(no response)"
     if text != "(no response)":
         yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
         return
     lc_messages.append(response)
-    lc_messages.append(HumanMessage(content="Please summarise your findings in plain text."))
+    lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
     response = llm.invoke(lc_messages)
     text = _extract_text(response.content)
     if text == "(no response)":
