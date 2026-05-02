@@ -251,15 +251,22 @@ def _pseudo_tool_call_from_text(text: str, tool_map: dict[str, Any]) -> tuple[st
     Some local models answer with text such as:
     <function=local_command><parameter=command>ls</parameter></function>
     instead of returning a structured LangChain tool call. Treat that as a tool
-    request only when the whole response is just the pseudo-call.
+    request only when the response is a short preamble plus one pseudo-call.
     """
     raw = text.strip()
-    if not raw.startswith("<function="):
+    if "<function=" not in raw:
         return None
     match = re.search(r"<function=([A-Za-z_][\w-]*)>\s*(.*?)\s*</function>", raw, flags=re.DOTALL)
     if not match:
         return None
-    if raw[match.end():].strip():
+    before = raw[:match.start()].strip()
+    after = raw[match.end():].strip()
+    after = re.sub(r"^</tool_call>\s*", "", after, flags=re.IGNORECASE).strip()
+    if after:
+        return None
+    if before and len(before) > 500:
+        return None
+    if before and any(marker in before for marker in ("```", "<function=", "</function>")):
         return None
     tool_name = match.group(1).replace("-", "_")
     if tool_name not in tool_map:
