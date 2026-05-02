@@ -131,6 +131,11 @@ Your reply MUST format it like this (note the pipes and the `---` divider row):
 If the table would be very wide, rotate to a vertical key/value table with two columns
 (Field, Value) instead. Either way, ALWAYS use `|` pipes — never raw whitespace alignment.
 
+For health/status/check requests, the final answer must be table-first. Include compact
+Markdown pipe tables for system overview, disk, memory, services/containers, and notable
+findings when that evidence is available. Use bullets only for a short final notes/risks
+section.
+
 When the user mentions "canvas", "the canvas", or "document canvas", they mean the
 Document Canvas — a side panel in this same web UI. It is NOT the Canvas LMS, NOT a
 Google product, and NOT an external API. To put content into it, simply include the

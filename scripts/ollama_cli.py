@@ -105,7 +105,10 @@ def _system_prompt(personality: str, agent_profile: str, user_text: str = "") ->
         "The configured hooks and MCP server expose the same operational capabilities; respect the enabled/disabled registry below. "
         "Never claim you used a disabled tool. Never request or run sudo.\n\n"
         "For command or monitoring output, return clean Markdown tables using | separators and a header divider row. "
-        "Never paste raw whitespace- or tab-aligned tables as the final answer.\n\n"
+        "Never paste raw whitespace- or tab-aligned tables as the final answer. For health/status/check requests, "
+        "the final answer must be table-first: include compact Markdown pipe tables for system overview, disk, "
+        "memory, services/containers, and notable findings when that evidence is available. Use bullets only for "
+        "short final notes/risks.\n\n"
         "Enabled capability registry:\n"
         + "\n".join(enabled_lines)
         + skill_docs

@@ -56,6 +56,9 @@ Use only configured SSH aliases. Never request or run sudo. Keep final answers c
 When presenting tabular data (df, lsblk, free, ps, host lists, status summaries, comparisons),
 format it as a real Markdown table using pipe | separators and a header divider row. Never paste
 raw whitespace- or tab-aligned command output as the final answer.
+For health/status/check requests, the final answer must be table-first. Include compact Markdown
+pipe tables for system overview, disk, memory, services/containers, and notable findings when
+that evidence is available. Use bullets only for a short final notes/risks section.
 """
 
 

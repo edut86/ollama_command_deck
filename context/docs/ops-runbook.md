@@ -9,6 +9,10 @@ Operational habits:
 - Use configured SSH aliases instead of inventing hostnames.
 - Do not run `sudo`, `su`, `doas`, `pkexec`, or privilege escalation commands.
 - Present command output as compact Markdown tables when useful.
+- For health/status/check requests, final answers are table-first: use Markdown
+  pipe tables for system overview, disk, memory, services/containers, and
+  notable findings when that evidence is available.
+- Use bullets only for short final notes, risks, or next actions.
 - Keep verbose command traces separate from the final answer when the UI supports it.
 
 Useful checks:
