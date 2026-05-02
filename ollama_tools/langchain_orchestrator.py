@@ -53,6 +53,7 @@ def describe_tool_call(tool_name: str | None, tool_args: dict[str, Any]) -> str:
 ORCHESTRATOR_SYSTEM_PROMPT = """You are a local operations assistant with tools.
 Use tools when the user asks about local shell state, SSH hosts, device status, internet search, current date, or current time.
 Use only configured SSH aliases. Never request or run sudo. Keep final answers concise.
+Use the bound tools directly. Do not print XML, HTML, JSON, or pseudo-code tool calls in the final answer.
 When presenting tabular data (df, lsblk, free, ps, host lists, status summaries, comparisons),
 format it as a real Markdown table using pipe | separators and a header divider row. Never paste
 raw whitespace- or tab-aligned command output as the final answer.
@@ -244,6 +245,42 @@ def _fallback_answer_from_tool_results(tool_results: list[str]) -> str:
     return "(no response)"
 
 
+def _pseudo_tool_call_from_text(text: str, tool_map: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    """Parse model-emitted XML-ish tool calls from models that lack native tool calling.
+
+    Some local models answer with text such as:
+    <function=local_command><parameter=command>ls</parameter></function>
+    instead of returning a structured LangChain tool call. Treat that as a tool
+    request only when the whole response is just the pseudo-call.
+    """
+    raw = text.strip()
+    if not raw.startswith("<function="):
+        return None
+    match = re.search(r"<function=([A-Za-z_][\w-]*)>\s*(.*?)\s*</function>", raw, flags=re.DOTALL)
+    if not match:
+        return None
+    if raw[match.end():].strip():
+        return None
+    tool_name = match.group(1).replace("-", "_")
+    if tool_name not in tool_map:
+        return None
+    body = match.group(2)
+    args: dict[str, Any] = {}
+    for param, value in re.findall(r"<parameter=([A-Za-z_][\w-]*)>\s*(.*?)\s*</parameter>", body, flags=re.DOTALL):
+        args[param] = value.strip()
+    return (tool_name, args) if args else None
+
+
+def _invoke_selected_tool(tool_map: dict[str, Any], tool_name: str | None, tool_args: dict[str, Any]) -> str:
+    selected_tool = tool_map.get(tool_name or "")
+    if selected_tool is None:
+        return f"Unknown tool: {tool_name}"
+    try:
+        return str(selected_tool.invoke(tool_args))
+    except Exception as exc:
+        return f"Tool error from {tool_name}: {exc}"
+
+
 def invoke_langchain_agent(
     model: str, messages: list[dict[str, str]], max_tool_rounds: int = 4, keep_alive: str | None = None
 ) -> tuple[str, ChatStats | None]:
@@ -274,6 +311,22 @@ def invoke_langchain_agent(
         tool_calls = getattr(response, "tool_calls", None) or []
         if not tool_calls:
             text = _extract_text(response.content)
+            pseudo_call = _pseudo_tool_call_from_text(text, tool_map)
+            if pseudo_call:
+                tool_name, tool_args = pseudo_call
+                lc_messages.append(response)
+                tool_result = _invoke_selected_tool(tool_map, tool_name, tool_args)
+                tool_results.append(str(tool_result))
+                lc_messages.append(
+                    HumanMessage(
+                        content=(
+                            f"Tool result from {tool_name} with args {json.dumps(tool_args, sort_keys=True)}:\n"
+                            f"{tool_result}\n\nContinue from this tool result and answer the user's request."
+                        )
+                    )
+                )
+                response = llm.invoke(lc_messages)
+                continue
             if text != "(no response)":
                 return text, _stats_from_response(response)
             # Thinking model produced no visible text — ask for a plain summary
@@ -289,14 +342,7 @@ def invoke_langchain_agent(
             tool_name = call.get("name")
             tool_args = call.get("args") or {}
             tool_id = call.get("id")
-            selected_tool = tool_map.get(tool_name)
-            if selected_tool is None:
-                tool_result = f"Unknown tool: {tool_name}"
-            else:
-                try:
-                    tool_result = selected_tool.invoke(tool_args)
-                except Exception as exc:
-                    tool_result = f"Tool error from {tool_name}: {exc}"
+            tool_result = _invoke_selected_tool(tool_map, tool_name, tool_args)
             tool_results.append(str(tool_result))
             lc_messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_id))
         response = llm.invoke(lc_messages)
@@ -361,6 +407,23 @@ def stream_langchain_agent_events(
         tool_calls = getattr(response, "tool_calls", None) or []
         if not tool_calls:
             text = _extract_text(response.content)
+            pseudo_call = _pseudo_tool_call_from_text(text, tool_map)
+            if pseudo_call:
+                tool_name, tool_args = pseudo_call
+                yield {"type": "cmd", "command": describe_tool_call(tool_name, tool_args)}
+                lc_messages.append(response)
+                tool_result = _invoke_selected_tool(tool_map, tool_name, tool_args)
+                tool_results.append(str(tool_result))
+                lc_messages.append(
+                    HumanMessage(
+                        content=(
+                            f"Tool result from {tool_name} with args {json.dumps(tool_args, sort_keys=True)}:\n"
+                            f"{tool_result}\n\nContinue from this tool result and answer the user's request."
+                        )
+                    )
+                )
+                response = llm.invoke(lc_messages)
+                continue
             if text != "(no response)":
                 yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
                 return
@@ -379,14 +442,7 @@ def stream_langchain_agent_events(
             tool_id = call.get("id")
             # Yield the command description BEFORE the tool runs so the UI shows it live
             yield {"type": "cmd", "command": describe_tool_call(tool_name, tool_args)}
-            selected_tool = tool_map.get(tool_name)
-            if selected_tool is None:
-                tool_result = f"Unknown tool: {tool_name}"
-            else:
-                try:
-                    tool_result = selected_tool.invoke(tool_args)
-                except Exception as exc:
-                    tool_result = f"Tool error from {tool_name}: {exc}"
+            tool_result = _invoke_selected_tool(tool_map, tool_name, tool_args)
             tool_results.append(str(tool_result))
             lc_messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_id))
         response = llm.invoke(lc_messages)
