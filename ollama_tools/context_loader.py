@@ -31,6 +31,7 @@ PROFILE_DOCS: dict[str, tuple[str, ...]] = {
     "ops": ("docs/ops-runbook.md", "skills/systematic-debugging.md"),
     "home": ("docs/home-assistant.md", "docs/ops-runbook.md"),
     "code": ("skills/systematic-debugging.md",),
+    "builder": ("skills/systematic-debugging.md",),
     "debug": ("skills/systematic-debugging.md",),
     "frontend": ("skills/frontend-design.md",),
     "writing": ("skills/humanizer.md",),
@@ -41,7 +42,7 @@ PROFILE_DOCS: dict[str, tuple[str, ...]] = {
 KEYWORD_DOCS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("home assistant", "mqtt", "meshtastic", "sensor", "automation"), ("docs/home-assistant.md",)),
     (("docker", "ssh", "health", "disk", "memory", "uptime", "service"), ("docs/ops-runbook.md",)),
-    (("bug", "error", "traceback", "failing", "debug", "root cause"), ("skills/systematic-debugging.md",)),
+    (("bug", "error", "traceback", "failing", "debug", "root cause", "implement", "patch", "run checks", "tests"), ("skills/systematic-debugging.md",)),
     (("frontend", "ui", "css", "layout", "responsive", "button", "pane"), ("skills/frontend-design.md",)),
     (("humanize", "rewrite", "prose", "polish", "docs"), ("skills/humanizer.md",)),
     (("skill", "skill.md", "trigger", "eval"), ("skills/skill-creator.md",)),
@@ -49,6 +50,7 @@ KEYWORD_DOCS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
 
 ROUTE_RULES: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("debug", ("traceback", "exception", "keyerror", "error:", "failed", "failing", "broken", "bug", "root cause", "containerconfig"), "debugging/build failure terms"),
+    ("builder", ("implement", "make the change", "patch", "fix this", "write code", "code writing", "add feature", "run tests", "run checks", "verify and fix"), "code-building feedback-loop terms"),
     ("skill_creator", ("skill.md", "skill creator", "new skill", "create a skill", "local skill", "skill profile", "trigger rule", "eval prompt"), "skill-creation terms"),
     ("home", ("home assistant", "hass", "mqtt", "meshtastic", "sensor", "automation", "command_line", "shell_command"), "Home Assistant/MQTT terms"),
     ("frontend", ("frontend", "ui", "css", "layout", "responsive", "pane", "button", "dropdown", "screen", "browser"), "frontend/UI terms"),

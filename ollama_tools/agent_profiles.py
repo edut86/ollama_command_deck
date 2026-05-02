@@ -58,6 +58,18 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "Avoid unrelated refactors."
         ),
     ),
+    "builder": AgentProfile(
+        name="builder",
+        label="Builder",
+        description="Bounded code-writing feedback loop: inspect, patch, verify, revise, and report.",
+        prompt=(
+            "Agent profile: builder. Use a bounded code-writing feedback loop. First inspect relevant files and "
+            "state a short implementation plan. Make the smallest coherent change, then run focused verification. "
+            "If verification fails, inspect the error and revise at most twice. Prefer existing project patterns, "
+            "avoid unrelated refactors, and do not claim success without evidence. Stop with changed files, "
+            "verification results, and remaining risks or blockers."
+        ),
+    ),
     "research": AgentProfile(
         name="research",
         label="Research",
@@ -119,6 +131,8 @@ PROFILE_ALIASES = {
     "caveman": "brief",
     "humanizer": "writing",
     "humanize": "writing",
+    "build": "builder",
+    "implement": "builder",
     "systematic_debugging": "debug",
     "systematic-debugging": "debug",
     "skill-creator": "skill_creator",

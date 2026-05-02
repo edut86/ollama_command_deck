@@ -19,6 +19,8 @@ CASES = [
     ("general", "humanize this status note", "writing", "skills/humanizer.md"),
     ("general", "answer this shorter", "brief", "skills/caveman.md"),
     ("general", "docker-compose up fails with KeyError ContainerConfig", "debug", "skills/systematic-debugging.md"),
+    ("general", "implement this fix and run tests", "builder", "skills/systematic-debugging.md"),
+    ("builder", "add a small feature and verify it", "builder", "skills/systematic-debugging.md"),
     ("general", "add a compact verbose pane beside chat", "frontend", "skills/frontend-design.md"),
     ("general", "make a local skill for MQTT troubleshooting", "skill_creator", "skills/skill-creator.md"),
     ("ops", "make this shorter", "ops", "docs/ops-runbook.md"),

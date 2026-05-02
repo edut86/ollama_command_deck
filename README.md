@@ -287,8 +287,8 @@ model notes, and deployment caveats.
 ## Agent Profiles
 
 Ollama Command Deck includes lightweight subagent-style profiles: `general`, `ops`,
-`home`, `code`, `research`, `writing`, `brief`, `debug`, `frontend`, and
-`skill_creator`. They are focused prompt/tool/context profiles, not parallel
+`home`, `code`, `builder`, `research`, `writing`, `brief`, `debug`,
+`frontend`, and `skill_creator`. They are focused prompt/tool/context profiles, not parallel
 always-on workers, so they fit smaller local Ollama systems better.
 
 Use the Web TUI `Agent:` dropdown, `/agent_profile ops`, or the CLI flag:
@@ -296,6 +296,7 @@ Use the Web TUI `Agent:` dropdown, `/agent_profile ops`, or the CLI flag:
 ```bash
 ./scripts/ollama_cli.py --agent-profile ops --json "check health on mqtt-node"
 ./scripts/ollama_cli.py --agent-profile home --json "make a Home Assistant sensor for Lilith health"
+./scripts/ollama_cli.py --agent-profile builder "implement this fix and run checks"
 ./scripts/ollama_cli.py --agent-profile debug "docker-compose up is failing with ContainerConfig"
 ```
 
@@ -322,7 +323,7 @@ not leak into normal ops answers or JSON automation responses.
 When the selected profile is `general`, the app can route obvious requests to a
 more specific profile. For example, Docker/SSH health checks route to `ops`,
 Home Assistant/MQTT prompts route to `home`, UI prompts route to `frontend`,
-and terse/caveman prompts route to `brief`. The verbose pane shows the active
+implementation/test feedback-loop prompts route to `builder`, and terse/caveman prompts route to `brief`. The verbose pane shows the active
 profile and loaded context files for each request.
 
 Check routing and context selection without calling a model:

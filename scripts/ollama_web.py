@@ -2210,6 +2210,7 @@ INDEX_HTML = r"""<!doctype html>
           <option value="ops">Agent: Ops</option>
           <option value="home">Agent: Home</option>
           <option value="code">Agent: Code</option>
+          <option value="builder">Agent: Builder</option>
           <option value="research">Agent: Research</option>
           <option value="writing">Agent: Writing</option>
           <option value="brief">Agent: Brief</option>

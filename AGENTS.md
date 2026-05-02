@@ -15,6 +15,7 @@ running several model generations at once.
 | `ops` | Device health, SSH, logs, disk, memory, Docker, services |
 | `home` | Home Assistant, MQTT, Meshtastic, sensors, automations |
 | `code` | Repo inspection, implementation planning, patches, tests |
+| `builder` | Bounded code-writing feedback loop: inspect, patch, verify, revise, report |
 | `research` | Search-backed summaries, documentation lookup, comparisons |
 | `writing` | Humanized docs, status notes, explanations, polished prose |
 | `brief` | Terse answers that preserve commands, facts, and risks |
@@ -32,6 +33,7 @@ Slash command:
 /agent_profile ops
 /agent_profile home
 /agent_profile code
+/agent_profile builder
 /agent_profile research
 /agent_profile writing
 /agent_profile brief
@@ -49,6 +51,7 @@ When `general` is selected, obvious prompts are routed automatically:
 |---|---|
 | Docker, SSH, disk, memory, uptime, services | `ops` |
 | errors, tracebacks, `ContainerConfig`, failing builds | `debug` |
+| implement, patch, write code, run tests, verify fixes | `builder` |
 | Home Assistant, MQTT, Meshtastic, sensors, automations | `home` |
 | UI, CSS, layout, pane, responsive behavior | `frontend` |
 | humanize, rewrite, polish prose | `writing` |
@@ -67,6 +70,7 @@ The headless CLI accepts `--agent-profile`:
 ./scripts/ollama_cli.py --agent-profile ops --json "check health on mqtt-node"
 ./scripts/ollama_cli.py --agent-profile home --json "write a Home Assistant sensor for mqtt-node health"
 ./scripts/ollama_cli.py --agent-profile code "look over this repo and suggest the next small fix"
+./scripts/ollama_cli.py --agent-profile builder "implement this fix and run checks"
 ./scripts/ollama_cli.py --agent-profile frontend "tighten the verbose pane layout"
 ./scripts/ollama_cli.py --agent-profile skill_creator "draft an MQTT troubleshooting skill"
 ./scripts/ollama_cli.py --agent-profile caveman "say this shorter"
@@ -109,7 +113,7 @@ prompt.
 | `context/docs/home-assistant.md` | `home`, Home Assistant/MQTT prompts |
 | `context/skills/humanizer.md` | `writing`, prose/humanize prompts |
 | `context/skills/caveman.md` | `brief` |
-| `context/skills/systematic-debugging.md` | `debug`, `ops`, `code`, bug/error prompts |
+| `context/skills/systematic-debugging.md` | `debug`, `ops`, `code`, `builder`, bug/error/build prompts |
 | `context/skills/frontend-design.md` | `frontend`, UI prompts |
 | `context/skills/skill-creator.md` | `skill_creator`, skill/eval prompts |
 
@@ -144,6 +148,7 @@ The next upgrade would be a small router that chooses a profile automatically:
 | Disk, logs, uptime, services, SSH hosts | `ops` |
 | Home Assistant YAML, MQTT, Meshtastic | `home` |
 | Repo files, bugs, tests, patches | `code` |
+| Implementing fixes/features with verification | `builder` |
 | Current docs, comparisons, web facts | `research` |
 
 Keep the first version deterministic and visible: show the selected profile in
