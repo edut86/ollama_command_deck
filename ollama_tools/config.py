@@ -6,6 +6,7 @@ import os
 import json
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CONFIG_FILE = Path(os.environ.get("OLLAMA_HOOKS_CONFIG", "")).expanduser() if os.environ.get("OLLAMA_HOOKS_CONFIG") else _ROOT / "config.toml"
@@ -64,11 +65,23 @@ def _get_bool(section: str, key: str, default: bool = False) -> bool:
 
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
-def get_ollama_base_url() -> str:
-    raw = _get("ollama", "url", DEFAULT_OLLAMA_BASE_URL).rstrip("/")
+def _normalize_base_url(raw: str) -> str:
+    raw = str(raw or "").strip().rstrip("/")
     if raw and "://" not in raw:
         raw = "http://" + raw
-    return raw
+    if not raw:
+        return raw
+    parsed = urlsplit(raw)
+    path = parsed.path.rstrip("/")
+    for suffix in ("/api/tags", "/api/chat", "/api/generate", "/api/show"):
+        if path == suffix:
+            path = ""
+            break
+    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def get_ollama_base_url() -> str:
+    return _normalize_base_url(_get("ollama", "url", DEFAULT_OLLAMA_BASE_URL))
 
 def get_ollama_api_key() -> str:
     direct = _get("ollama", "api_key", "")

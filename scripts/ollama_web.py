@@ -306,7 +306,7 @@ from ollama_tools.auth import (  # noqa: E402
     delete_all_users, get_first_username, has_users,
     rotate_session_secret, verify_session,
 )
-from ollama_tools.first_run import WARNING_TEXT, reset_runtime_state, write_first_run_config  # noqa: E402
+from ollama_tools.first_run import WARNING_TEXT, normalize_ollama_url, reset_runtime_state, write_first_run_config  # noqa: E402
 from ollama_tools.agent_profiles import AGENT_PROFILES, agent_profile_prompt, normalize_agent_profile  # noqa: E402
 from ollama_tools.context_loader import context_prompt, select_context  # noqa: E402
 from ollama_tools.tool_registry import all_metadata  # noqa: E402
@@ -456,13 +456,25 @@ PORT_SEARCH_LIMIT = int(os.environ.get("OLLAMA_WEB_PORT_SEARCH_LIMIT", "20"))
 # Resolve KOKORO_URL now that config is loaded (env var set early overrides config)
 KOKORO_URL = (os.environ.get("KOKORO_URL", "") or get_piper_url()).rstrip("/")
 
-# ── Multi-GPU support ─────────────────────────────────────────────────────────
-GPU_URLS: dict[str, str] = get_gpu_urls()     # e.g. {"0": "http://...:11434", "1": "..."}
-GPU_LABELS: dict[str, str] = get_gpu_labels() # e.g. {"0": "1080 Ti #1"}
-
 def _gpu_base_url(gpu_id: str) -> str | None:
     """Return the Ollama URL for a GPU ID, or None to use the default."""
-    return GPU_URLS.get(str(gpu_id)) or None
+    # Do not cache this at module import. First-run setup can rewrite
+    # config.toml and call reload_config() without restarting the process.
+    return get_gpu_urls().get(str(gpu_id)) or None
+
+
+def _gpu_rows() -> list[dict[str, str]]:
+    """Return current GPU/Ollama endpoint rows for the browser selector."""
+    gpu_urls = get_gpu_urls()
+    gpu_labels = get_gpu_labels()
+    rows = []
+    for gid, url in sorted(gpu_urls.items()):
+        from urllib.parse import urlparse as _uparse
+        parsed = _uparse(url)
+        default_label = f"GPU {gid} — port {parsed.port or 11434}"
+        label = gpu_labels.get(gid, default_label)
+        rows.append({"id": gid, "url": url, "label": label})
+    return rows
 
 # ── Whisper STT ───────────────────────────────────────────────────────────────
 _whisper_model_inst = None
@@ -4649,14 +4661,7 @@ class Handler(BaseHTTPRequestHandler):
             self.respond_json(data)
             return
         if self.path == "/api/gpu-list":
-            gpus = []
-            for gid, url in sorted(GPU_URLS.items()):
-                from urllib.parse import urlparse as _uparse
-                parsed = _uparse(url)
-                default_label = f"GPU {gid} — port {parsed.port or 11434}"
-                label = GPU_LABELS.get(gid, default_label)
-                gpus.append({"id": gid, "url": url, "label": label})
-            self.respond_json({"ok": True, "gpus": gpus})
+            self.respond_json({"ok": True, "gpus": _gpu_rows()})
             return
         if self.path == "/api/stt-status":
             self.respond_json({"ok": True, "enabled": is_whisper_available()})
@@ -4774,7 +4779,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                if not str(payload.get("ollama_url") or "").strip():
+                ollama_url = normalize_ollama_url(str(payload.get("ollama_url") or ""))
+                if not ollama_url:
                     self.respond_json({"ok": False, "error": "Ollama API URL is required"}, status=400)
                     return
                 auth_enabled = bool(payload.get("auth_enabled", True))
@@ -4815,7 +4821,7 @@ class Handler(BaseHTTPRequestHandler):
                     api_key = _get_key()
 
                 write_first_run_config(
-                    ollama_url=str(payload.get("ollama_url") or ""),
+                    ollama_url=ollama_url,
                     ollama_api_key=api_key,
                     work_dir=str(payload.get("work_dir") or "/workspace"),
                     enable_ssh=bool(payload.get("enable_ssh")),
