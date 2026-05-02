@@ -9,6 +9,30 @@ license notes for upstream projects used by this app.
 
 ## Quick Start
 
+### Docker Setup
+
+This is the recommended path for a new install:
+
+```bash
+git clone https://github.com/<your-github-user>/ollama_command_deck.git
+cd ollama_command_deck
+./scripts/setup_docker_paths.sh
+```
+
+The setup script writes a local `docker-compose.override.yml`, lets you choose
+where `/config`, `/data`, `/workspace`, and SSH files come from, then offers to
+build and start the Docker services.
+
+If you skip the script's deploy prompt, start it manually:
+
+```bash
+./scripts/deploy_web.sh
+```
+
+Open `http://localhost:8765`; the first-run setup wizard appears.
+
+### Local Python Setup
+
 ```bash
 # Create virtualenv and install dependencies
 python3 -m venv .venv
@@ -30,6 +54,20 @@ The deployable container runs as a non-root `ollama-hooks` user whose UID/GID is
 
 The most useful configuration binds the host user's home dir to `/data` and builds the image with that user's UID/GID. The agent then reads and writes the host user's real `~/.ssh/config`, `~/.config`, project repos, etc., and any files it creates have correct host ownership.
 
+1. **Choose Docker mount paths:**
+    ```bash
+    ./scripts/setup_docker_paths.sh
+    ```
+    This writes `docker-compose.override.yml`, lets you choose `/config`, `/data`,
+    `/workspace`, and SSH mount behavior, then offers to rebuild/recreate `web`.
+2. **Build and start manually if you skipped the script's deploy prompt:**
+    ```bash
+    ./scripts/deploy_web.sh
+    ```
+3. **Open `http://localhost:8765`** — the first-run setup wizard appears.
+
+Advanced manual setup:
+
 1. **Edit `docker-compose.yml`** so the `web` service builds with your UID/GID and binds your home:
     ```yaml
     web:
@@ -50,17 +88,6 @@ The most useful configuration binds the host user's home dir to `/data` and buil
         OLLAMA_HOOKS_DATA_DIR: /data
         OLLAMA_WEB_NO_VENV: "1"
     ```
-2. **Choose Docker mount paths:**
-    ```bash
-    ./scripts/setup_docker_paths.sh
-    ```
-    This writes `docker-compose.override.yml`, lets you choose `/config`, `/data`,
-    `/workspace`, and SSH mount behavior, then offers to rebuild/recreate `web`.
-3. **Build and start manually if you skipped the script's deploy prompt:**
-    ```bash
-    ./scripts/deploy_web.sh
-    ```
-4. **Open `http://localhost:8765`** — the first-run setup wizard appears.
 
 The wizard asks for an admin username/password, Ollama API URL and optional API key/token, a working directory (e.g. `/data/git/<your-project>` to start the agent inside one of your repos), and whether to enable local command, SSH, internet search, MCP tooling, and **dangerous mode** (lifts the work-directory sandbox and the destructive-command blocklist; privilege-escalation tokens — `sudo`, `su`, `doas`, `pkexec`, `passwd`, `visudo` — stay blocked).
 
