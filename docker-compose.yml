@@ -1,0 +1,42 @@
+services:
+
+  piper:
+    build:
+      context: .
+      dockerfile: Dockerfile.piper
+    restart: unless-stopped
+    ports:
+      - "8880:8880"
+    volumes:
+      # Drop .onnx voice files here on the host
+      - ~/piper-voices:/piper-voices:ro
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      # Generated first-run config and secrets.
+      - command-deck-config:/config
+      # Persist sessions, canvas files, users, and app data.
+      - command-deck-data:/data
+      # Restrict local command/file work to this explicit workspace.
+      - ./workspace:/workspace
+      # /data is the in-container user home, so ~/.ssh resolves to /data/.ssh
+      # and the agent (in dangerous mode) can write SSH config persistently.
+      # If you want to seed it from the host instead, uncomment one of:
+      # - ~/.ssh/config:/data/.ssh/config:ro
+      # - ~/.ssh/known_hosts:/data/.ssh/known_hosts:ro
+    environment:
+      OLLAMA_HOOKS_CONFIG: /config/config.toml
+      OLLAMA_HOOKS_DATA_DIR: /data
+      OLLAMA_WEB_NO_VENV: "1"
+      # Uses the bundled piper service for offline TTS when voices are present.
+      KOKORO_URL: http://piper:8880
+
+volumes:
+  command-deck-config:
+  command-deck-data:

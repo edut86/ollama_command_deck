@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ollama-tools": {
+      "command": "python3",
+      "args": [
+        "/path/to/ollama-command-deck/mcp_servers/ollama_tools_server.py"
+      ],
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434"
+      }
+    }
+  }
+}

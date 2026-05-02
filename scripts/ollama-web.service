@@ -1,0 +1,20 @@
+[Unit]
+Description=Ollama Command Deck web UI (with embedded Whisper STT)
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ollama-hooks
+Group=ollama-hooks
+WorkingDirectory=/opt/ollama-command-deck
+Environment=WEB_CERT_FILE=/opt/ollama-command-deck/certs/web.crt
+Environment=WEB_KEY_FILE=/opt/ollama-command-deck/certs/web.key
+ExecStart=/opt/ollama-command-deck/.venv/bin/python scripts/ollama_web.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

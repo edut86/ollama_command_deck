@@ -1,0 +1,22 @@
+services:
+  mcp-ssh-sre-server-01:
+    image: ghcr.io/ohare93/mcp-ssh-sre:latest
+    ports:
+      - "3001:3000"
+    environment:
+      SSH_HOST: "server-01.example.local"
+      SSH_USERNAME: "your-user"
+      SSH_KEY_PATH: "/keys/ssh_key"
+    volumes:
+      - "${SSH_KEY_PATH:?set SSH_KEY_PATH}:/keys/ssh_key:ro"
+
+  mcp-ssh-sre-mqtt-node:
+    image: ghcr.io/ohare93/mcp-ssh-sre:latest
+    ports:
+      - "3002:3000"
+    environment:
+      SSH_HOST: "server-02.example.local"
+      SSH_USERNAME: "your-user"
+      SSH_KEY_PATH: "/keys/ssh_key"
+    volumes:
+      - "${SSH_KEY_PATH:?set SSH_KEY_PATH}:/keys/ssh_key:ro"

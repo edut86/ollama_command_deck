@@ -1,0 +1,80 @@
+# Safe example configuration for deployable Ollama Command Deck installs.
+# Do not put real secrets in this file.
+
+[setup]
+completed = false
+version = 1
+
+[auth]
+enabled = true
+# When true, the web UI skips sign-in after setup. Use only on a trusted LAN
+# or behind another auth layer/reverse proxy.
+skip_login = false
+session_secret_file = "/config/session_secret"
+users_file = "/data/users.json"
+cookie_secure = false
+cookie_same_site = "Lax"
+session_ttl_hours = 24
+
+[paths]
+data_dir = "/data"
+work_dir = "/workspace"
+allow_work_dir_writes = true
+# DANGEROUS: when true, the agent can run any non-privilege-escalation
+# command anywhere in the container — bypasses work_dir confinement and
+# the destructive-command blocklist. Privilege escalation (sudo, su,
+# doas, pkexec, passwd, visudo) and a fork-bomb pattern remain blocked.
+# Docker isolation becomes the only meaningful boundary. Leave false
+# unless you are running a fully sandboxed container you can throw away.
+dangerous_mode = false
+
+[ollama]
+url = "http://localhost:11434"
+api_key_file = "/config/ollama_api_key"
+
+[web]
+host = "0.0.0.0"
+port = 8765
+cert_file = ""
+key_file = ""
+
+[tts]
+piper_url = ""
+
+[search]
+searxng_url = ""
+brave_api_key = ""
+
+[tools]
+local_command = false
+ssh_command = false
+internet_search = false
+current_datetime = true
+ollama_models = true
+monitoring = false
+
+[mcp]
+enabled = false
+server_enabled = false
+
+[hooks]
+enabled = true
+run_local = false
+run_ssh = false
+search_web = false
+current_time = true
+
+[skills]
+enabled = true
+local_command = false
+device_ssh = false
+internet_search = false
+current_time = true
+langchain_orchestrator = true
+monitoring_mcps = false
+ollama_api = true
+
+[ssh]
+enabled = false
+config_path = "/data/.ssh/config"
+known_hosts_path = "/data/.ssh/known_hosts"

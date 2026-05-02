@@ -1,0 +1,7 @@
+edge-tts
+langchain
+langchain-ollama
+mcp
+pypdf
+python-docx
+pymupdf

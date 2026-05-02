@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "ollama-tools": {
+      "command": "/path/to/ollama-command-deck/.venv/bin/python",
+      "args": [
+        "/path/to/ollama-command-deck/mcp_servers/ollama_tools_server.py"
+      ],
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "PROMETHEUS_URL": "http://localhost:9090"
+      }
+    },
+    "netdata-server-01": {
+      "url": "http://server-01.example.local:19999/mcp"
+    },
+    "netdata-mqtt-node": {
+      "url": "http://server-02.example.local:19999/mcp"
+    },
+    "mcp-ssh-sre-server-01": {
+      "url": "http://localhost:3001/mcp"
+    },
+    "mcp-ssh-sre-mqtt-node": {
+      "url": "http://localhost:3002/mcp"
+    }
+  }
+}
