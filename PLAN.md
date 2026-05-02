@@ -164,12 +164,13 @@
 - [x] Returns structured JSON errors when the requested model is not installed
 
 ### Agent Profiles / Lightweight Subagents (`ollama_tools/agent_profiles.py`)
-- [x] Shared profile registry: `general`, `ops`, `home`, `code`, `research`
+- [x] Shared profile registry: `general`, `ops`, `home`, `code`, `builder`, `research`
 - [x] Web TUI `Agent:` dropdown and `/agent_profile <name>` slash command
 - [x] Session persistence for selected profile
 - [x] CLI `--agent-profile` option
 - [x] Profiles add focused system guidance without spawning parallel model workers
 - [x] Expanded profiles: `writing`, `brief`, `debug`, `frontend`, `skill_creator`
+- [x] Added `builder` profile for bounded inspect → patch → verify → revise code-writing loops
 - [x] Added `context/` docs skeleton for durable project, ops, Home Assistant, skill, and eval context
 - [x] Added `ollama_tools/context_loader.py` for profile-scoped context injection
 - [x] Injects relevant context into CLI and Web prompts without making writing/design/debug skills global
