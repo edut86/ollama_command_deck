@@ -793,6 +793,13 @@ def build_system_prompt(
     if name != "Lilith":
         prompt += f"\n\nThe user has renamed the assistant to {name}. Use that name for self-reference."
     prompt += "\n\n" + agent_profile_prompt(agent_profile)
+    if normalize_agent_profile(agent_profile) == "builder":
+        prompt += (
+            f"\n\nBuilder workspace: the configured work directory is `{get_work_dir()}`. "
+            "Inspect and edit only inside this directory. If the user asks for a path outside this directory, "
+            "stop and report the configuration mismatch; do not fall back to inspecting `/app`, sibling repos, "
+            "or parent workspace directories."
+        )
     prompt += context_prompt(ROOT, agent_profile, user_text)
     if CHAT_MODES[mode]:
         prompt += "\n\n" + CHAT_MODES[mode]

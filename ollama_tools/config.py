@@ -125,7 +125,8 @@ def get_data_dir() -> Path:
     return Path.home() / ".config" / "ollama_tui"
 
 def get_work_dir() -> Path:
-    raw = _get("paths", "work_dir", os.environ.get("OLLAMA_HOOKS_WORK_DIR", ""))
+    default = os.environ.get("OLLAMA_HOOKS_WORK_DIR", "/workspace" if _DEPLOY_MODE else "")
+    raw = _get("paths", "work_dir", default)
     return Path(raw).expanduser() if raw else Path.cwd()
 
 def get_allow_work_dir_writes() -> bool:

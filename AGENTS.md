@@ -54,6 +54,9 @@ Builder also asks the local-command tool to enforce the configured work
 directory even when dangerous mode is enabled. Other profiles keep the normal
 dangerous-mode behavior.
 
+In Docker deploy mode, a missing work-directory setting falls back to
+`/workspace`, not `/app`.
+
 When `general` is selected, obvious prompts are routed automatically:
 
 | Prompt mentions | Routed profile |

@@ -20,6 +20,7 @@ from ollama_tools.langchain_orchestrator import (  # noqa: E402
 )
 from ollama_tools.ollama_api import ChatStats  # noqa: E402
 from ollama_tools.agent_profiles import AGENT_PROFILES, PROFILE_ALIASES, agent_profile_prompt, normalize_agent_profile  # noqa: E402
+from ollama_tools.config import get_work_dir  # noqa: E402
 from ollama_tools.context_loader import context_prompt, select_context  # noqa: E402
 from ollama_tools.tool_registry import all_metadata  # noqa: E402
 from scripts.ollama_tui import whitespace_columns_to_markdown  # noqa: E402
@@ -97,10 +98,19 @@ def _system_prompt(personality: str, agent_profile: str, user_text: str = "") ->
     skill_docs = _load_enabled_skills()
     profile_context = context_prompt(ROOT, agent_profile, user_text)
     personality_text = PERSONALITIES.get(personality, PERSONALITIES[DEFAULT_PERSONALITY])
+    builder_workspace = ""
+    if normalize_agent_profile(agent_profile) == "builder":
+        builder_workspace = (
+            f"\n\nBuilder workspace: the configured work directory is `{get_work_dir()}`. "
+            "Inspect and edit only inside this directory. If the user asks for a path outside this directory, "
+            "stop and report the configuration mismatch; do not fall back to inspecting `/app`, sibling repos, "
+            "or parent workspace directories."
+        )
     return (
         "Your name is Lilith. You are the headless CLI agent for Ollama Command Deck.\n"
         f"{personality_text}\n\n"
         f"{agent_profile_prompt(agent_profile)}\n\n"
+        f"{builder_workspace}\n\n"
         "Use the bound tools for SSH, local shell, internet search, time, Ollama, and monitoring work. "
         "The configured hooks and MCP server expose the same operational capabilities; respect the enabled/disabled registry below. "
         "Never claim you used a disabled tool. Never request or run sudo.\n\n"

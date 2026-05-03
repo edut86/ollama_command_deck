@@ -308,6 +308,9 @@ commands, tool results, final response, and errors so you can verify that the
 agent is operating inside the workspace even before it edits project files.
 Builder local commands are also constrained to that configured work directory,
 even if dangerous mode is enabled.
+In Docker deploy mode, a missing work-directory setting falls back to
+`/workspace` so Builder does not accidentally inspect the application source at
+`/app`.
 
 ## Web UI Preferences
 
