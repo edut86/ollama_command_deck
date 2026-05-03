@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import secrets
 import socket
 import shutil
 import subprocess
@@ -298,6 +299,8 @@ from ollama_tools.config import (  # noqa: E402
     get_data_dir, get_setup_completed, is_deploy_mode,
     get_ollama_base_url, get_piper_url, get_searxng_url, get_brave_api_key,
     get_ssh_config_path, get_tool_enabled, get_work_dir, get_allow_work_dir_writes,
+    get_thunderbird_enabled, get_thunderbird_token, get_thunderbird_max_messages,
+    get_thunderbird_max_chars_per_message,
     reload_config,
     set_hook_override, set_skill_override, set_tool_override,
 )
@@ -889,6 +892,79 @@ def collect_chat(model: str, messages: list[dict[str, str]], verbose: bool, keep
         else:
             parts.append(str(chunk))
     return "".join(parts), stats
+
+
+def _default_thunderbird_model() -> str:
+    preferred = {"qwen3.5:latest", "qwen3:latest", "qwen3.5", "qwen3"}
+    try:
+        models = list(list_models(base_url=get_ollama_base_url()))
+    except Exception:
+        return "qwen3.5:latest"
+    for item in models:
+        if item.name in preferred:
+            return item.name
+    return models[0].name if models else "qwen3.5:latest"
+
+
+def _message_text_from_payload(item: dict[str, Any], max_chars: int) -> str:
+    body = str(item.get("body") or item.get("text") or item.get("excerpt") or "")
+    if len(body) > max_chars:
+        body = body[:max_chars].rstrip() + "\n... [message truncated]"
+    subject = str(item.get("subject") or "(no subject)")
+    author = str(item.get("author") or item.get("from") or "")
+    date = str(item.get("date") or "")
+    folder = str(item.get("folder") or "")
+    return (
+        f"Subject: {subject}\n"
+        f"From: {author}\n"
+        f"Date: {date}\n"
+        f"Folder: {folder}\n"
+        f"Body:\n{body}"
+    ).strip()
+
+
+def handle_thunderbird_analyze(payload: dict[str, Any]) -> dict[str, Any]:
+    if not get_thunderbird_enabled():
+        return {"ok": False, "error": "Thunderbird bridge is disabled."}
+    expected = get_thunderbird_token()
+    provided = str(payload.get("token") or "")
+    if not expected or not provided or not secrets.compare_digest(expected, provided):
+        return {"ok": False, "error": "Invalid Thunderbird bridge token."}
+    raw_messages = payload.get("messages")
+    if not isinstance(raw_messages, list) or not raw_messages:
+        return {"ok": False, "error": "messages must be a non-empty list."}
+
+    max_messages = get_thunderbird_max_messages()
+    max_chars = get_thunderbird_max_chars_per_message()
+    messages = [item for item in raw_messages[:max_messages] if isinstance(item, dict)]
+    if not messages:
+        return {"ok": False, "error": "No valid message objects supplied."}
+
+    question = str(payload.get("question") or payload.get("query") or "Find the relevant email details.").strip()
+    model = str(payload.get("model") or "").strip() or _default_thunderbird_model()
+    email_context = "\n\n---\n\n".join(_message_text_from_payload(item, max_chars) for item in messages)
+    chat_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a read-only email search assistant for Thunderbird. Use only the email snippets "
+                "provided in this request. Do not claim you can send, delete, move, mark, or modify email. "
+                "If the snippets do not contain the answer, say what is missing and suggest a narrower search."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Question:\n{question}\n\nEmail snippets:\n{email_context}",
+        },
+    ]
+    answer, stats = collect_chat(model, chat_messages, verbose=True, keep_alive="10m")
+    return {
+        "ok": True,
+        "model": model,
+        "text": whitespace_columns_to_markdown(answer),
+        "stats": stats_to_dict(stats),
+        "messages_used": len(messages),
+    }
 
 
 def chat_messages_from_payload(payload: dict[str, Any], text: str) -> list[dict[str, str]]:
@@ -4331,7 +4407,7 @@ INDEX_HTML = r"""<!doctype html>
         document.getElementById("rtOllama").textContent = "Ollama: " + (d.ollama_url || "?");
         const t = d.tools || {};
         const enabled = Object.keys(t).filter(k => t[k]);
-        const labels = {local_command:"local", ssh_command:"ssh", internet_search:"search", current_datetime:"time", ollama_models:"models"};
+        const labels = {local_command:"local", ssh_command:"ssh", internet_search:"search", current_datetime:"time", ollama_models:"models", thunderbird_readonly:"thunderbird"};
         const pretty = enabled.map(k => labels[k] || k);
         document.getElementById("rtTools").textContent = "Tools: " + (pretty.length ? pretty.join(", ") : "none");
       } catch(_){}
@@ -4405,6 +4481,7 @@ def _current_setup_config() -> dict:
         "enable_ssh": get_tool_enabled("ssh_command"),
         "enable_search": get_tool_enabled("internet_search"),
         "enable_mcp": get_tool_enabled("monitoring") or get_tool_enabled("mcp"),
+        "enable_thunderbird": get_thunderbird_enabled(),
         "dangerous_mode": get_dangerous_mode(),
         "auth_enabled": get_auth_enabled() if get_setup_completed() else True,
         "skip_login": (get_auth_skip_allowed() or not get_auth_enabled()) if get_setup_completed() else False,
@@ -4427,6 +4504,7 @@ def _runtime_status_snapshot() -> dict:
             "internet_search": get_tool_enabled("internet_search"),
             "current_datetime": get_tool_enabled("current_datetime"),
             "ollama_models": get_tool_enabled("ollama_models"),
+            "thunderbird_readonly": get_thunderbird_enabled(),
         },
         "setup_completed": get_setup_completed(),
         "has_user": has_users(),
@@ -4529,6 +4607,10 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
   <div class="check"><input id="enable_ssh" type="checkbox"><span>Enable SSH tools. The agent reads <code>/data/.ssh/config</code> for host aliases. High risk.</span></div>
   <div class="check"><input id="enable_search" type="checkbox"><span>Enable internet search tools. Medium risk.</span></div>
   <div class="check"><input id="enable_mcp" type="checkbox"><span>Enable MCP server/tooling.</span></div>
+  <div class="check"><input id="enable_thunderbird" type="checkbox"><span>Enable read-only Thunderbird bridge. Thunderbird can send selected/search-result message snippets to Command Deck for analysis. No send, delete, move, or compose permissions.</span></div>
+  <label>Thunderbird bridge token</label>
+  <input id="thunderbird_token" readonly placeholder="Generated after enabling and saving">
+  <p class="muted">Install the example add-on from <code>examples/thunderbird-readonly</code> and paste this token into its settings.</p>
 
   <h2>Search backends (optional)</h2>
   <label>SearXNG URL</label>
@@ -4581,6 +4663,8 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
     document.getElementById("enable_ssh").checked = !!cfg.enable_ssh;
     document.getElementById("enable_search").checked = !!cfg.enable_search;
     document.getElementById("enable_mcp").checked = !!cfg.enable_mcp;
+    document.getElementById("enable_thunderbird").checked = !!cfg.enable_thunderbird;
+    document.getElementById("thunderbird_token").value = cfg.enable_thunderbird ? "(save to reveal token)" : "";
     document.getElementById("dangerous_mode").checked = !!cfg.dangerous_mode;
     document.getElementById("searxng_url").value = cfg.searxng_url || "";
     document.getElementById("brave_api_key").value = "";
@@ -4670,6 +4754,7 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
       enable_ssh: document.getElementById("enable_ssh").checked,
       enable_search: document.getElementById("enable_search").checked,
       enable_mcp: document.getElementById("enable_mcp").checked,
+      enable_thunderbird: document.getElementById("enable_thunderbird").checked,
       dangerous_mode: document.getElementById("dangerous_mode").checked,
       piper_url: document.getElementById("piper_url").value,
       searxng_url: document.getElementById("searxng_url").value,
@@ -4680,9 +4765,14 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
     const r = await fetch("/api/setup", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
     const d = await r.json().catch(()=>({}));
     if(!r.ok || !d.ok){ msg.className="err"; msg.textContent = d.error || "Save failed."; return; }
+    if(d.thunderbird_token){
+      document.getElementById("thunderbird_token").value = d.thunderbird_token;
+    }
     msg.className = "ok";
-    msg.textContent = body.auth_enabled ? "Saved. Redirecting to login…" : "Saved. Redirecting to app…";
-    setTimeout(function(){ location.href = body.auth_enabled ? "/login" : "/"; }, 1000);
+    msg.textContent = d.thunderbird_token ? "Saved. Copy the Thunderbird token, then continue." : (body.auth_enabled ? "Saved. Redirecting to login…" : "Saved. Redirecting to app…");
+    if(!d.thunderbird_token){
+      setTimeout(function(){ location.href = body.auth_enabled ? "/login" : "/"; }, 1000);
+    }
   };
 })();
 </script>
@@ -4719,7 +4809,7 @@ class Handler(BaseHTTPRequestHandler):
         return clean in {
             "/favicon.ico", "/healthz", "/setup", "/login",
             "/api/setup", "/api/setup-state", "/api/setup-auth", "/api/setup-reset",
-            "/api/auth/login",
+            "/api/auth/login", "/api/thunderbird/analyze",
         }
 
     def _require_access(self) -> bool:
@@ -4739,6 +4829,16 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.redirect("/login")
         return False
+
+    def do_OPTIONS(self) -> None:
+        if self.path == "/api/thunderbird/analyze":
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.end_headers()
+            return
+        self.send_error(404)
 
     def do_GET(self) -> None:
         if not self._require_access():
@@ -4866,6 +4966,18 @@ class Handler(BaseHTTPRequestHandler):
         global _SETUP_DONE_RUNTIME
         if not self._require_access():
             return
+        if self.path == "/api/thunderbird/analyze":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 2_000_000:
+                    self.respond_json({"ok": False, "error": "payload too large"}, status=413)
+                    return
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                result = handle_thunderbird_analyze(payload)
+                self.respond_json(result, status=200 if result.get("ok") else 403)
+            except Exception as exc:
+                self.respond_json({"ok": False, "error": str(exc)}, status=500)
+            return
         if self.path == "/api/setup-auth":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -4943,6 +5055,7 @@ class Handler(BaseHTTPRequestHandler):
                     enable_local=bool(payload.get("enable_local")),
                     enable_search=bool(payload.get("enable_search")),
                     enable_mcp=bool(payload.get("enable_mcp")),
+                    enable_thunderbird=bool(payload.get("enable_thunderbird")),
                     dangerous_mode=bool(payload.get("dangerous_mode")),
                     piper_url=str(payload.get("piper_url") or ""),
                     searxng_url=str(payload.get("searxng_url") or ""),
@@ -4957,7 +5070,10 @@ class Handler(BaseHTTPRequestHandler):
                 rotate_session_secret()
                 _SETUP_TOKENS.clear()
                 _SETUP_DONE_RUNTIME = True
-                self.respond_json({"ok": True}, cookie="")
+                self.respond_json({
+                    "ok": True,
+                    "thunderbird_token": get_thunderbird_token() if get_thunderbird_enabled() else "",
+                }, cookie="")
             except Exception as exc:
                 self.respond_json({"ok": False, "error": str(exc)}, status=400)
             return
@@ -5153,6 +5269,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        if self.path == "/api/thunderbird/analyze":
+            self.send_header("Access-Control-Allow-Origin", "*")
         if cookie is not None:
             if cookie:
                 secure = "; Secure" if get_cookie_secure() else ""

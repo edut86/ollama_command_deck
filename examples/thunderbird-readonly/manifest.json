@@ -1,0 +1,27 @@
+{
+  "manifest_version": 2,
+  "name": "Command Deck Mail Finder",
+  "description": "Read-only Thunderbird bridge for searching and analyzing selected email snippets with Ollama Command Deck.",
+  "version": "0.1.0",
+  "applications": {
+    "gecko": {
+      "id": "command-deck-mail-finder@example.local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "accountsRead",
+    "messagesRead",
+    "storage",
+    "http://localhost:8765/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "browser_action": {
+    "default_title": "Command Deck Mail Finder",
+    "default_popup": "popup.html"
+  },
+  "message_display_action": {
+    "default_title": "Analyze message with Command Deck",
+    "default_popup": "popup.html"
+  }
+}

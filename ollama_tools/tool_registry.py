@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import get_hook_enabled, get_skill_enabled, get_tool_enabled
+from .config import get_hook_enabled, get_skill_enabled, get_thunderbird_enabled, get_tool_enabled
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ TOOL_DESCRIPTIONS = {
     "local_command": ("tool", "Run local shell commands", "high"),
     "ssh_command": ("tool", "Run commands on SSH aliases", "high"),
     "monitoring": ("tool", "Read monitoring systems such as Netdata, Glances, Prometheus, MQTT", "medium"),
+    "thunderbird_readonly": ("tool", "Analyze read-only Thunderbird message snippets", "medium"),
 }
 
 HOOK_DESCRIPTIONS = {
@@ -44,6 +45,8 @@ SKILL_DESCRIPTIONS = {
 
 
 def tool_enabled(name: str) -> bool:
+    if name == "thunderbird_readonly":
+        return get_thunderbird_enabled()
     if name in {"list_ssh_hosts"}:
         return get_tool_enabled("ssh_command")
     if name in {"mqtt_snapshot"}:

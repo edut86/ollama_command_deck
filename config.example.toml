@@ -41,6 +41,12 @@ key_file = ""
 [tts]
 piper_url = ""
 
+[thunderbird]
+enabled = false
+token_file = "/config/thunderbird_token"
+max_messages = 20
+max_chars_per_message = 6000
+
 [search]
 searxng_url = ""
 brave_api_key = ""
@@ -52,6 +58,7 @@ internet_search = false
 current_datetime = true
 ollama_models = true
 monitoring = false
+thunderbird_readonly = false
 
 [mcp]
 enabled = false

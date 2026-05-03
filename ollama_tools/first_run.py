@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import secrets
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -11,7 +12,7 @@ from .config import get_config_file, get_data_dir
 
 
 WARNING_TEXT = (
-    "Warning: enabling local commands, SSH, hooks, MCP tools, or writable workspaces allows "
+    "Warning: enabling local commands, SSH, hooks, MCP tools, Thunderbird snippets, or writable workspaces allows "
     "the AI-assisted app to run actions on this computer or configured devices. Incorrect "
     "commands or tool calls can delete files, change system state, expose data, interrupt "
     "services, or damage remote devices. Only enable tools you understand, restrict the "
@@ -48,6 +49,7 @@ def write_first_run_config(
     enable_local: bool,
     enable_search: bool,
     enable_mcp: bool,
+    enable_thunderbird: bool = False,
     dangerous_mode: bool = False,
     piper_url: str = "",
     searxng_url: str = "",
@@ -69,6 +71,20 @@ def write_first_run_config(
         key_file = str(key_path)
     else:
         key_file = ""
+
+    thunderbird_token_path = config_path.parent / "thunderbird_token"
+    if enable_thunderbird:
+        try:
+            thunderbird_token = thunderbird_token_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            thunderbird_token = ""
+        if not thunderbird_token:
+            thunderbird_token = secrets.token_urlsafe(32)
+            thunderbird_token_path.write_text(thunderbird_token + "\n", encoding="utf-8")
+            try:
+                os.chmod(thunderbird_token_path, 0o600)
+            except OSError:
+                pass
 
     ollama_url = normalize_ollama_url(ollama_url)
 
@@ -106,6 +122,12 @@ key_file = ""
 [tts]
 piper_url = {_quote(piper_url.rstrip("/"))}
 
+[thunderbird]
+enabled = {str(enable_thunderbird).lower()}
+token_file = {_quote(str(thunderbird_token_path))}
+max_messages = 20
+max_chars_per_message = 6000
+
 [search]
 searxng_url = {_quote(searxng_url.rstrip("/"))}
 brave_api_key = {_quote(brave_api_key)}
@@ -117,6 +139,7 @@ internet_search = {str(enable_search).lower()}
 current_datetime = true
 ollama_models = true
 monitoring = false
+thunderbird_readonly = {str(enable_thunderbird).lower()}
 
 [mcp]
 enabled = {str(enable_mcp).lower()}
@@ -165,6 +188,7 @@ def reset_runtime_state() -> None:
         config_path,
         config_path.parent / "session_secret",
         config_path.parent / "ollama_api_key",
+        config_path.parent / "thunderbird_token",
         data_dir / "users.json",
         data_dir / "tool_overrides.json",
         data_dir / "hook_overrides.json",

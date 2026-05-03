@@ -284,6 +284,25 @@ For Home Assistant, call it through `command_line` or `shell_command` and use
 See [HOME_ASSISTANT.md](HOME_ASSISTANT.md) for example sensors, shell commands,
 model notes, and deployment caveats.
 
+## Thunderbird Read-Only Bridge
+
+Setup can enable a read-only Thunderbird bridge. When enabled, Command Deck
+generates a separate bridge token and accepts message snippets at:
+
+```text
+POST /api/thunderbird/analyze
+```
+
+The example MailExtension in
+[`examples/thunderbird-readonly`](examples/thunderbird-readonly) can analyze the
+currently displayed message or search-result snippets. It requests Thunderbird
+read permissions only (`messagesRead`, `accountsRead`, and `storage`) and does
+not request compose, send, delete, move, or message modification permissions.
+
+Paste the generated setup token into the add-on popup. The bridge answers using
+only snippets posted by Thunderbird; Command Deck does not directly open or scan
+your mail store.
+
 ## Agent Profiles
 
 Ollama Command Deck includes lightweight subagent-style profiles: `general`, `ops`,

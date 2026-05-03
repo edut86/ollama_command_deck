@@ -178,6 +178,32 @@ def get_ssh_config_path() -> str:
 def get_ssh_known_hosts_path() -> str:
     return _get("ssh", "known_hosts_path", "")
 
+def get_thunderbird_enabled() -> bool:
+    return _get_bool("thunderbird", "enabled", False)
+
+def get_thunderbird_token_file() -> Path:
+    raw = _get("thunderbird", "token_file", "")
+    return Path(raw).expanduser() if raw else get_config_file().parent / "thunderbird_token"
+
+def get_thunderbird_token() -> str:
+    path = get_thunderbird_token_file()
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+def get_thunderbird_max_messages() -> int:
+    try:
+        return max(1, int(_get("thunderbird", "max_messages", "20")))
+    except ValueError:
+        return 20
+
+def get_thunderbird_max_chars_per_message() -> int:
+    try:
+        return max(200, int(_get("thunderbird", "max_chars_per_message", "6000")))
+    except ValueError:
+        return 6000
+
 def get_tool_enabled(name: str, default: bool | None = None) -> bool:
     if default is None:
         if not _DEPLOY_MODE:

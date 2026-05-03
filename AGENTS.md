@@ -117,6 +117,14 @@ the profile still cannot use it.
 | MCP server | Exposes the same operational functions to external clients |
 | Skills | Enabled Markdown files can be loaded into CLI guidance |
 | Context docs | Profile-scoped files from `context/` are injected only when selected |
+| Thunderbird bridge | Optional token-protected read-only endpoint for message snippets |
+
+## Thunderbird Read-Only Bridge
+
+The setup checkbox enables `/api/thunderbird/analyze` and creates a separate
+bridge token. The example add-on in `examples/thunderbird-readonly` sends
+selected/search-result snippets to that endpoint. It must remain read-only: no
+compose, send, delete, move, or message modification permissions.
 
 ## Profile-Scoped Context
 

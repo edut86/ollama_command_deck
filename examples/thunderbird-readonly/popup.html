@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+  <title>Command Deck Mail Finder</title>
+</head>
+<body>
+  <main>
+    <h1>Mail Finder</h1>
+    <label>Command Deck URL</label>
+    <input id="baseUrl" value="http://localhost:8765">
+
+    <label>Bridge token</label>
+    <input id="token" type="password" placeholder="Paste setup token">
+
+    <label>Model (optional)</label>
+    <input id="model" placeholder="qwen3.5:latest">
+
+    <label>Question</label>
+    <textarea id="question" rows="3">Summarize this email and list dates, people, and action items.</textarea>
+
+    <div class="actions">
+      <button id="save">Save</button>
+      <button id="current">Analyze Current</button>
+    </div>
+
+    <label>Search mail</label>
+    <input id="query" placeholder="invoice March sender@example.com">
+    <div class="actions">
+      <button id="search">Search and Analyze</button>
+    </div>
+
+    <pre id="status"></pre>
+    <section id="answer"></section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
