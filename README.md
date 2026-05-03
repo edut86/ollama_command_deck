@@ -302,6 +302,11 @@ Use the Web TUI `Agent:` dropdown, `/agent_profile ops`, or the CLI flag:
 
 See [AGENTS.md](AGENTS.md) for profile behavior and limitations.
 
+When the Web TUI runs the `builder` profile, it appends a live Markdown trail to
+`BUILDER_RUN.md` in the configured work directory. That file records the prompt,
+commands, tool results, final response, and errors so you can verify that the
+agent is operating inside the workspace even before it edits project files.
+
 ## Web UI Preferences
 
 The Web UI defaults the assistant name to `Lilith`, but the name can be changed

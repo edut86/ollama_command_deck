@@ -45,6 +45,11 @@ Slash command:
 
 The selected profile is saved with each chat session.
 
+When `builder` runs from the Web TUI, it appends `BUILDER_RUN.md` in the
+configured work directory. The log records the prompt, commands, tool results,
+final answer, and errors, which makes read-only inspections visible even when no
+project file has been modified yet.
+
 When `general` is selected, obvious prompts are routed automatically:
 
 | Prompt mentions | Routed profile |

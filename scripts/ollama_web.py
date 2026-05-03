@@ -297,7 +297,7 @@ from ollama_tools.config import (  # noqa: E402
     get_dangerous_mode,
     get_data_dir, get_setup_completed, is_deploy_mode,
     get_ollama_base_url, get_piper_url, get_searxng_url, get_brave_api_key,
-    get_ssh_config_path, get_tool_enabled, get_work_dir,
+    get_ssh_config_path, get_tool_enabled, get_work_dir, get_allow_work_dir_writes,
     reload_config,
     set_hook_override, set_skill_override, set_tool_override,
 )
@@ -812,6 +812,52 @@ def stats_to_dict(stats: ChatStats | None) -> dict[str, Any] | None:
     }
 
 
+def _markdown_fence(text: str, lang: str = "") -> str:
+    body = str(text or "").replace("```", "'''").rstrip()
+    return f"```{lang}\n{body}\n```"
+
+
+def _builder_log_append(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def _builder_log_start(model: str, prompt: str, paths: list[str]) -> tuple[Path | None, str | None]:
+    if not get_allow_work_dir_writes():
+        return None, "Builder run log disabled because work-directory writes are disabled."
+    work_dir = get_work_dir()
+    path = work_dir / "BUILDER_RUN.md"
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        if not path.exists():
+            _builder_log_append(path, "# Builder Run Log\n\n")
+        _builder_log_append(
+            path,
+            (
+                f"## {stamp}\n\n"
+                f"- Model: `{model}`\n"
+                f"- Work directory: `{work_dir}`\n"
+                f"- Context: {', '.join(paths) if paths else 'none'}\n"
+                "- Status: started\n\n"
+                "### Prompt\n\n"
+                f"{_markdown_fence(prompt)}\n\n"
+            ),
+        )
+    except OSError as exc:
+        return None, f"Builder run log unavailable at {path}: {exc}"
+    return path, None
+
+
+def _builder_log_event(path: Path | None, heading: str, text: str, lang: str = "") -> None:
+    if path is None:
+        return
+    try:
+        _builder_log_append(path, f"### {heading}\n\n{_markdown_fence(text, lang)}\n\n")
+    except OSError:
+        return
+
+
 def collect_chat(model: str, messages: list[dict[str, str]], verbose: bool, keep_alive: str | None = None) -> tuple[str, ChatStats | None]:
     parts: list[str] = []
     stats: ChatStats | None = None
@@ -1000,19 +1046,36 @@ def stream_chat_events(payload: dict[str, Any]):
             )
         canvas_ctx = {"role": "system", "content": canvas_note + canvas_content}
         messages = messages[:-1] + [canvas_ctx, messages[-1]]
+    builder_log_path: Path | None = None
     try:
         if not images and (text.startswith("/agent ") or (agent_mode and not text.startswith("/"))):
             agent_text = text[len("/agent "):].strip() if text.startswith("/agent ") else text
             agent_messages = messages[:-1] + [{"role": "user", "content": agent_text}]
             final_event: dict[str, Any] = {}
             tool_rounds = 10 if context_selection.active_profile == "builder" else 4
+            if context_selection.active_profile == "builder":
+                builder_log_path, builder_log_error = _builder_log_start(model, agent_text, context_selection.paths)
+                if builder_log_path:
+                    yield {"type": "cmd", "command": f"Builder run log: {builder_log_path}"}
+                elif builder_log_error:
+                    yield {"type": "cmd", "command": builder_log_error}
             for event in stream_langchain_agent_events(model, agent_messages, max_tool_rounds=tool_rounds, keep_alive=keep_alive):
                 if event["type"] == "cmd":
-                    yield {"type": "cmd", "command": event["command"]}
+                    command = str(event.get("command", ""))
+                    _builder_log_event(builder_log_path, "Command", command, "bash")
+                    yield {"type": "cmd", "command": command}
+                elif event["type"] == "tool":
+                    role = str(event.get("role") or "Tool result")
+                    tool_text = str(event.get("text") or "")
+                    _builder_log_event(builder_log_path, role, tool_text)
+                    yield {"type": "tool", "role": role, "text": tool_text}
                 elif event["type"] == "final":
                     final_event = event
             stats = final_event.get("stats")
             answer_text = whitespace_columns_to_markdown(str(final_event.get("text", "")))
+            _builder_log_event(builder_log_path, "Final response", answer_text)
+            if builder_log_path:
+                _builder_log_event(builder_log_path, "Status", "complete")
             yield {
                 "type": "final",
                 "text": answer_text,
@@ -1056,6 +1119,7 @@ def stream_chat_events(payload: dict[str, Any]):
             }
         yield {"type": "done"}
     except (OllamaError, LangChainUnavailableError, ValueError, RuntimeError) as exc:
+        _builder_log_event(builder_log_path, "Error", str(exc))
         yield {"type": "error", "error": str(exc)}
 
 
