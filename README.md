@@ -307,7 +307,9 @@ When the Web TUI runs the `builder` profile, it appends a live Markdown trail to
 commands, tool results, final response, and errors so you can verify that the
 agent is operating inside the workspace even before it edits project files.
 The runtime manages this file directly; Builder should not try to create it with
-shell commands.
+shell commands. Builder final responses include the runtime log path as an
+application-added note so local models do not confuse it with model-written
+files.
 Builder local commands are also constrained to that configured work directory,
 even if dangerous mode is enabled.
 In Docker deploy mode, a missing work-directory setting falls back to

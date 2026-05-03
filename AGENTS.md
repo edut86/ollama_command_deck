@@ -51,6 +51,8 @@ final answer, and errors, which makes read-only inspections visible even when no
 project file has been modified yet.
 The runtime manages this file directly; Builder should not try to create it with
 shell commands or mark it missing because no shell command wrote it.
+Builder final responses include the runtime log path as an application-added
+note.
 
 Builder also asks the local-command tool to enforce the configured work
 directory even when dangerous mode is enabled. Other profiles keep the normal

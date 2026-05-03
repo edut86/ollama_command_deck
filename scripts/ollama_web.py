@@ -866,6 +866,18 @@ def _builder_log_event(path: Path | None, heading: str, text: str, lang: str = "
         return
 
 
+def _builder_log_final_note(answer_text: str, path: Path | None) -> str:
+    if path is None:
+        return answer_text
+    note = (
+        f"\n\nRuntime log: `{path}` was created/opened by the Web runtime. "
+        "Ignore any model statement above that says `BUILDER_RUN.md` was missing or not shown in shell evidence."
+    )
+    if str(path) in answer_text and "Runtime log:" in answer_text:
+        return answer_text
+    return answer_text.rstrip() + note
+
+
 def collect_chat(model: str, messages: list[dict[str, str]], verbose: bool, keep_alive: str | None = None) -> tuple[str, ChatStats | None]:
     parts: list[str] = []
     stats: ChatStats | None = None
@@ -1103,6 +1115,7 @@ def stream_chat_events(payload: dict[str, Any]):
                     final_event = event
             stats = final_event.get("stats")
             answer_text = whitespace_columns_to_markdown(str(final_event.get("text", "")))
+            answer_text = _builder_log_final_note(answer_text, builder_log_path)
             _builder_log_event(builder_log_path, "Final response", answer_text)
             if builder_log_path:
                 _builder_log_event(builder_log_path, "Status", "complete")
