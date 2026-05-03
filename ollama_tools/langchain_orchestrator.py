@@ -285,6 +285,82 @@ def _fallback_answer_from_tool_results(tool_results: list[str]) -> str:
     return "(no response)"
 
 
+def _tool_results_evidence(tool_results: list[str], max_chars: int = 9000) -> str:
+    """Compact tool outputs into plain text evidence for an unbound final summary call."""
+    blocks: list[str] = []
+    for raw in tool_results:
+        try:
+            data = json.loads(raw)
+        except Exception:
+            blocks.append(raw[:1200])
+            continue
+        if isinstance(data, dict) and "command" in data:
+            command = str(data.get("command") or "")
+            returncode = data.get("returncode", "")
+            stdout = str(data.get("stdout") or "").strip()
+            stderr = str(data.get("stderr") or "").strip()
+            output = stdout or stderr or "(no output)"
+            if len(output) > 1800:
+                output = output[:1800].rstrip() + "\n... [truncated]"
+            blocks.append(f"COMMAND: {command}\nRETURN CODE: {returncode}\nOUTPUT:\n{output}")
+        else:
+            rendered = json.dumps(data, indent=2) if not isinstance(data, str) else data
+            blocks.append(rendered[:1200])
+    evidence = "\n\n---\n\n".join(blocks)
+    if len(evidence) > max_chars:
+        evidence = evidence[-max_chars:]
+        evidence = "[earlier evidence truncated]\n" + evidence
+    return evidence
+
+
+def _last_user_request(messages: list[dict[str, str]]) -> str:
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return str(message.get("content") or "")
+    return ""
+
+
+def _summarize_without_tools(
+    model: str,
+    llm_kwargs: dict[str, Any],
+    original_messages: list[dict[str, str]],
+    tool_results: list[str],
+) -> tuple[str, ChatStats | None]:
+    """Ask the model for a final answer with no tools bound."""
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_ollama import ChatOllama
+    except ImportError as exc:
+        raise _missing_dependency_error() from exc
+
+    plain_kwargs = dict(llm_kwargs)
+    plain_llm = ChatOllama(**plain_kwargs)
+    evidence = _tool_results_evidence(tool_results)
+    request = _last_user_request(original_messages)
+    response = plain_llm.invoke(
+        [
+            SystemMessage(
+                content=(
+                    "You are writing the final answer after a tool-using agent exhausted its tool budget. "
+                    "No tools are available in this turn. Do not emit tool-call markup. Use only the evidence provided. "
+                    "If the evidence is partial, say so and give the best useful answer from it."
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"Original user request:\n{request}\n\n"
+                    f"{FINAL_SUMMARY_PROMPT}\n\n"
+                    f"Tool evidence:\n{evidence}"
+                )
+            ),
+        ]
+    )
+    text = _extract_text(response.content)
+    if "<function=" in text:
+        text = "(no response)"
+    return text, _stats_from_response(response)
+
+
 def _pseudo_tool_call_from_text(text: str, tool_map: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
     """Parse model-emitted XML-ish tool calls from models that lack native tool calling.
 
@@ -377,13 +453,10 @@ def invoke_langchain_agent(
             if text != "(no response)":
                 return text, _stats_from_response(response)
             # Thinking model produced no visible text — ask for a plain summary
-            lc_messages.append(response)
-            lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
-            response = llm.invoke(lc_messages)
-            text = _extract_text(response.content)
+            text, summary_stats = _summarize_without_tools(model, llm_kwargs, messages, tool_results)
             if text == "(no response)":
                 text = _fallback_answer_from_tool_results(tool_results)
-            return text, _stats_from_response(response)
+            return text, summary_stats
         lc_messages.append(response)
         for call in tool_calls:
             tool_name = call.get("name")
@@ -399,13 +472,10 @@ def invoke_langchain_agent(
         text = "(no response)"
     if text != "(no response)":
         return text, _stats_from_response(response)
-    lc_messages.append(response)
-    lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
-    response = llm.invoke(lc_messages)
-    text = _extract_text(response.content)
+    text, summary_stats = _summarize_without_tools(model, llm_kwargs, messages, tool_results)
     if text == "(no response)":
         text = _fallback_answer_from_tool_results(tool_results)
-    return text, _stats_from_response(response)
+    return text, summary_stats
 
 
 def invoke_langchain_agent_with_trace(
@@ -476,13 +546,10 @@ def stream_langchain_agent_events(
             if text != "(no response)":
                 yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
                 return
-            lc_messages.append(response)
-            lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
-            response = llm.invoke(lc_messages)
-            text = _extract_text(response.content)
+            text, summary_stats = _summarize_without_tools(model, llm_kwargs, messages, tool_results)
             if text == "(no response)":
                 text = _fallback_answer_from_tool_results(tool_results)
-            yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
+            yield {"type": "final", "text": text, "stats": summary_stats}
             return
         lc_messages.append(response)
         for call in tool_calls:
@@ -502,13 +569,10 @@ def stream_langchain_agent_events(
     if text != "(no response)":
         yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
         return
-    lc_messages.append(response)
-    lc_messages.append(HumanMessage(content=FINAL_SUMMARY_PROMPT))
-    response = llm.invoke(lc_messages)
-    text = _extract_text(response.content)
+    text, summary_stats = _summarize_without_tools(model, llm_kwargs, messages, tool_results)
     if text == "(no response)":
         text = _fallback_answer_from_tool_results(tool_results)
-    yield {"type": "final", "text": text, "stats": _stats_from_response(response)}
+    yield {"type": "final", "text": text, "stats": summary_stats}
 
 
 def _extract_text(content: object) -> str:
