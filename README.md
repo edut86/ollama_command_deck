@@ -306,6 +306,8 @@ When the Web TUI runs the `builder` profile, it appends a live Markdown trail to
 `BUILDER_RUN.md` in the configured work directory. That file records the prompt,
 commands, tool results, final response, and errors so you can verify that the
 agent is operating inside the workspace even before it edits project files.
+Builder local commands are also constrained to that configured work directory,
+even if dangerous mode is enabled.
 
 ## Web UI Preferences
 

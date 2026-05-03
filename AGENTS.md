@@ -50,6 +50,10 @@ configured work directory. The log records the prompt, commands, tool results,
 final answer, and errors, which makes read-only inspections visible even when no
 project file has been modified yet.
 
+Builder also asks the local-command tool to enforce the configured work
+directory even when dangerous mode is enabled. Other profiles keep the normal
+dangerous-mode behavior.
+
 When `general` is selected, obvious prompts are routed automatically:
 
 | Prompt mentions | Routed profile |

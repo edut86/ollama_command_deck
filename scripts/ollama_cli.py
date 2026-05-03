@@ -145,7 +145,12 @@ def run_agent(prompt: str, *, model: str, personality: str, agent_profile: str, 
     commands: list[str] = []
     final_text = ""
     final_stats: ChatStats | None = None
-    for event in stream_langchain_agent_events(model, messages, max_tool_rounds=max_tool_rounds):
+    for event in stream_langchain_agent_events(
+        model,
+        messages,
+        max_tool_rounds=max_tool_rounds,
+        enforce_work_dir=agent_profile == "builder",
+    ):
         if event["type"] == "cmd":
             command = str(event.get("command") or "")
             commands.append(command)

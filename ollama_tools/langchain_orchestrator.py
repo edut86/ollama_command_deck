@@ -89,7 +89,7 @@ def _missing_dependency_error() -> LangChainUnavailableError:
     )
 
 
-def _build_tools() -> list[Any]:
+def _build_tools(enforce_work_dir: bool = False) -> list[Any]:
     try:
         from langchain_core.tools import tool
     except ImportError as exc:
@@ -103,7 +103,7 @@ def _build_tools() -> list[Any]:
     @tool
     def local_command(command: str, timeout: int = 60) -> str:
         """Run a non-sudo local shell command and return stdout, stderr, and return code."""
-        result = run_local_command(command, timeout=timeout)
+        result = run_local_command(command, timeout=timeout, enforce_work_dir=enforce_work_dir)
         return json.dumps(result.__dict__, indent=2)
 
     @tool
@@ -456,7 +456,11 @@ def _tool_result_event_text(tool_name: str | None, tool_result: str, max_chars: 
 
 
 def invoke_langchain_agent(
-    model: str, messages: list[dict[str, str]], max_tool_rounds: int = 4, keep_alive: str | None = None
+    model: str,
+    messages: list[dict[str, str]],
+    max_tool_rounds: int = 4,
+    keep_alive: str | None = None,
+    enforce_work_dir: bool = False,
 ) -> tuple[str, ChatStats | None]:
     """Invoke ChatOllama with LangChain tool binding and run requested tools.
 
@@ -468,7 +472,7 @@ def invoke_langchain_agent(
     except ImportError as exc:
         raise _missing_dependency_error() from exc
 
-    tools = _build_tools()
+    tools = _build_tools(enforce_work_dir=enforce_work_dir)
     tool_map = {item.name: item for item in tools}
     llm_kwargs: dict = {"model": model, "base_url": get_ollama_base_url(), "temperature": 0, "timeout": 180}
     if keep_alive:
@@ -530,13 +534,23 @@ def invoke_langchain_agent(
 
 
 def invoke_langchain_agent_with_trace(
-    model: str, messages: list[dict[str, str]], max_tool_rounds: int = 4, keep_alive: str | None = None
+    model: str,
+    messages: list[dict[str, str]],
+    max_tool_rounds: int = 4,
+    keep_alive: str | None = None,
+    enforce_work_dir: bool = False,
 ) -> tuple[str, ChatStats | None, list[str]]:
     """Invoke the LangChain agent and return user-visible tool command descriptions."""
     commands: list[str] = []
     text = ""
     stats = None
-    for event in stream_langchain_agent_events(model, messages, max_tool_rounds, keep_alive=keep_alive):
+    for event in stream_langchain_agent_events(
+        model,
+        messages,
+        max_tool_rounds,
+        keep_alive=keep_alive,
+        enforce_work_dir=enforce_work_dir,
+    ):
         if event["type"] == "cmd":
             commands.append(event["command"])
         elif event["type"] == "final":
@@ -546,7 +560,11 @@ def invoke_langchain_agent_with_trace(
 
 
 def stream_langchain_agent_events(
-    model: str, messages: list[dict[str, str]], max_tool_rounds: int = 4, keep_alive: str | None = None
+    model: str,
+    messages: list[dict[str, str]],
+    max_tool_rounds: int = 4,
+    keep_alive: str | None = None,
+    enforce_work_dir: bool = False,
 ):
     """Generator that yields live events as the agent runs tools and produces a final answer.
 
@@ -560,7 +578,7 @@ def stream_langchain_agent_events(
     except ImportError as exc:
         raise _missing_dependency_error() from exc
 
-    tools = _build_tools()
+    tools = _build_tools(enforce_work_dir=enforce_work_dir)
     tool_map = {item.name: item for item in tools}
     llm_kwargs: dict = {"model": model, "base_url": get_ollama_base_url(), "temperature": 0, "timeout": 180}
     if keep_alive:

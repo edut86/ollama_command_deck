@@ -1059,7 +1059,14 @@ def stream_chat_events(payload: dict[str, Any]):
                     yield {"type": "cmd", "command": f"Builder run log: {builder_log_path}"}
                 elif builder_log_error:
                     yield {"type": "cmd", "command": builder_log_error}
-            for event in stream_langchain_agent_events(model, agent_messages, max_tool_rounds=tool_rounds, keep_alive=keep_alive):
+            enforce_work_dir = context_selection.active_profile == "builder"
+            for event in stream_langchain_agent_events(
+                model,
+                agent_messages,
+                max_tool_rounds=tool_rounds,
+                keep_alive=keep_alive,
+                enforce_work_dir=enforce_work_dir,
+            ):
                 if event["type"] == "cmd":
                     command = str(event.get("command", ""))
                     _builder_log_event(builder_log_path, "Command", command, "bash")
@@ -1227,6 +1234,7 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
                 agent_messages,
                 max_tool_rounds=10 if agent_profile == "builder" else 4,
                 keep_alive=keep_alive,
+                enforce_work_dir=agent_profile == "builder",
             )
             return {
                 "ok": True,
