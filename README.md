@@ -315,6 +315,9 @@ even if dangerous mode is enabled.
 In Docker deploy mode, a missing work-directory setting falls back to
 `/workspace` so Builder does not accidentally inspect the application source at
 `/app`.
+Builder receives a larger default tool budget than the other profiles so it can
+inspect, patch, run verification, inspect failures, revise, and rerun before it
+summarizes.
 
 ## Web UI Preferences
 

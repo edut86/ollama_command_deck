@@ -1072,7 +1072,7 @@ def stream_chat_events(payload: dict[str, Any]):
             agent_text = text[len("/agent "):].strip() if text.startswith("/agent ") else text
             agent_messages = messages[:-1] + [{"role": "user", "content": agent_text}]
             final_event: dict[str, Any] = {}
-            tool_rounds = 10 if context_selection.active_profile == "builder" else 4
+            tool_rounds = 20 if context_selection.active_profile == "builder" else 4
             if context_selection.active_profile == "builder":
                 builder_log_path, builder_log_error = _builder_log_start(model, agent_text, context_selection.paths)
                 if builder_log_path:
@@ -1268,7 +1268,7 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
             answer, stats, commands = invoke_langchain_agent_with_trace(
                 model,
                 agent_messages,
-                max_tool_rounds=10 if agent_profile == "builder" else 4,
+                max_tool_rounds=20 if agent_profile == "builder" else 4,
                 keep_alive=keep_alive,
                 enforce_work_dir=agent_profile == "builder",
             )

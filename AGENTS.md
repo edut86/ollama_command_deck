@@ -61,6 +61,9 @@ dangerous-mode behavior.
 In Docker deploy mode, a missing work-directory setting falls back to
 `/workspace`, not `/app`.
 
+Builder has a larger default tool budget than other profiles so it can inspect,
+patch, verify, debug failures, revise, and rerun before summarizing.
+
 When `general` is selected, obvious prompts are routed automatically:
 
 | Prompt mentions | Routed profile |

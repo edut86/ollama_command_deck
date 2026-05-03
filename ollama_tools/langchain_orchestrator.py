@@ -34,6 +34,8 @@ FINAL_SUMMARY_PROMPT = (
     "say that plainly, summarize what you inspected, and list the next specific command you would run. "
     "Do not claim a file was changed unless the evidence includes a successful write/edit command or post-edit diff. "
     "Do not claim verification passed unless the evidence includes a verification command that ran successfully. "
+    "If any verification command failed and no later successful verification command supersedes it, start with INCOMPLETE "
+    "and include the failing command, error output, and next exact fix command. "
     "If the evidence only supports a proposed change, call it Proposed change, not Change made."
 )
 

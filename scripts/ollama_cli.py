@@ -198,7 +198,7 @@ def main() -> int:
     parser.add_argument("--agent-profile", default="general", choices=sorted(set(AGENT_PROFILES) | set(PROFILE_ALIASES)))
     parser.add_argument("--json", action="store_true", help="Print a JSON object for Home Assistant/automation use.")
     parser.add_argument("--show-commands", action="store_true", help="Print tool command trace to stderr.")
-    parser.add_argument("--max-tool-rounds", type=int, default=6)
+    parser.add_argument("--max-tool-rounds", type=int, default=None)
     parser.add_argument("--list-capabilities", action="store_true", help="Print configured tools/hooks/skills and exit.")
     args = parser.parse_args()
 
@@ -216,12 +216,15 @@ def main() -> int:
         return 2
 
     try:
+        max_tool_rounds = args.max_tool_rounds
+        if max_tool_rounds is None:
+            max_tool_rounds = 20 if normalize_agent_profile(args.agent_profile) == "builder" else 6
         result = run_agent(
             prompt,
             model=args.model,
             personality=args.personality,
             agent_profile=args.agent_profile,
-            max_tool_rounds=max(1, args.max_tool_rounds),
+            max_tool_rounds=max(1, max_tool_rounds),
             show_commands=args.show_commands,
         )
     except (LangChainUnavailableError, ValueError, RuntimeError, Exception) as exc:
