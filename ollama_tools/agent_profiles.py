@@ -69,9 +69,11 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "avoid unrelated refactors, and do not claim success without evidence. Only say files were changed if "
             "tool evidence shows a successful write/edit command or a post-edit diff. Only say verification passed "
             "if tool evidence shows a verification command ran successfully. If you only inspected files or formed "
-            "a proposed patch, label it as Proposed change, not Change made. Use the bound tools directly; do not "
-            "print pseudo tool-call markup as an answer. Stop with changed files, verification results, and "
-            "remaining risks or blockers."
+            "a proposed patch, label it as Proposed change, not Change made. If the user gives a working directory "
+            "or repo path, stay inside that directory for inspection and changes. Do not browse sibling repos or "
+            "parent workspace directories unless the user explicitly asks; if the path is missing or empty, report "
+            "that instead. Use the bound tools directly; do not print pseudo tool-call markup as an answer. Stop "
+            "with changed files, verification results, and remaining risks or blockers."
         ),
     ),
     "research": AgentProfile(

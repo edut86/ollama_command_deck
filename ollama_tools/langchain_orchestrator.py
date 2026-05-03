@@ -429,6 +429,32 @@ def _invoke_selected_tool(tool_map: dict[str, Any], tool_name: str | None, tool_
         return f"Tool error from {tool_name}: {exc}"
 
 
+def _tool_result_event_text(tool_name: str | None, tool_result: str, max_chars: int = 3000) -> str:
+    """Return a verbose-pane friendly summary of a tool result."""
+    try:
+        data = json.loads(tool_result)
+    except Exception:
+        text = tool_result
+    else:
+        if isinstance(data, dict) and "command" in data:
+            stdout = str(data.get("stdout") or "").strip()
+            stderr = str(data.get("stderr") or "").strip()
+            parts = [
+                f"command: {data.get('command', '')}",
+                f"returncode: {data.get('returncode', '')}",
+            ]
+            if stdout:
+                parts.append("stdout:\n" + stdout)
+            if stderr:
+                parts.append("stderr:\n" + stderr)
+            text = "\n".join(parts)
+        else:
+            text = json.dumps(data, indent=2)
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "\n... [tool output truncated]"
+    return f"{tool_name or 'tool'} result:\n{text}"
+
+
 def invoke_langchain_agent(
     model: str, messages: list[dict[str, str]], max_tool_rounds: int = 4, keep_alive: str | None = None
 ) -> tuple[str, ChatStats | None]:
@@ -585,6 +611,7 @@ def stream_langchain_agent_events(
             yield {"type": "cmd", "command": describe_tool_call(tool_name, tool_args)}
             tool_result = _invoke_selected_tool(tool_map, tool_name, tool_args)
             tool_results.append(str(tool_result))
+            yield {"type": "tool", "role": "Tool result", "text": _tool_result_event_text(tool_name, str(tool_result))}
             lc_messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_id))
         response = llm.invoke(lc_messages)
 
