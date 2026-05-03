@@ -31,7 +31,10 @@ class LangChainUnavailableError(RuntimeError):
 FINAL_SUMMARY_PROMPT = (
     "Tool budget reached. Do not call any more tools and do not emit tool-call markup. "
     "Using only the tool outputs already provided, answer the user's request. If you only have partial evidence, "
-    "say that plainly, summarize what you inspected, and list the next specific command you would run."
+    "say that plainly, summarize what you inspected, and list the next specific command you would run. "
+    "Do not claim a file was changed unless the evidence includes a successful write/edit command or post-edit diff. "
+    "Do not claim verification passed unless the evidence includes a verification command that ran successfully. "
+    "If the evidence only supports a proposed change, call it Proposed change, not Change made."
 )
 
 
@@ -297,12 +300,32 @@ def _tool_results_evidence(tool_results: list[str], max_chars: int = 9000) -> st
         if isinstance(data, dict) and "command" in data:
             command = str(data.get("command") or "")
             returncode = data.get("returncode", "")
+            lowered_command = command.lower()
+            write_evidence = returncode == 0 and bool(
+                re.search(
+                    r"\b(apply_patch|python\s+- <<|python3\s+- <<|perl\s+-pi|sed\s+-i|tee\s+|cat\s+>|mv\s+|cp\s+|touch\s+)\b",
+                    lowered_command,
+                )
+            )
+            verify_evidence = returncode == 0 and bool(
+                re.search(r"\b(pytest|prove|npm test|pnpm test|yarn test|cargo test|go test|ruff|mypy|compileall|bash -n|python -m pytest)\b", lowered_command)
+            )
             stdout = str(data.get("stdout") or "").strip()
             stderr = str(data.get("stderr") or "").strip()
             output = stdout or stderr or "(no output)"
             if len(output) > 1800:
                 output = output[:1800].rstrip() + "\n... [truncated]"
-            blocks.append(f"COMMAND: {command}\nRETURN CODE: {returncode}\nOUTPUT:\n{output}")
+            blocks.append(
+                "\n".join(
+                    [
+                        f"COMMAND: {command}",
+                        f"RETURN CODE: {returncode}",
+                        f"WRITE_EVIDENCE: {'yes' if write_evidence else 'no'}",
+                        f"VERIFY_EVIDENCE: {'yes' if verify_evidence else 'no'}",
+                        f"OUTPUT:\n{output}",
+                    ]
+                )
+            )
         else:
             rendered = json.dumps(data, indent=2) if not isinstance(data, str) else data
             blocks.append(rendered[:1200])
@@ -343,7 +366,9 @@ def _summarize_without_tools(
                 content=(
                     "You are writing the final answer after a tool-using agent exhausted its tool budget. "
                     "No tools are available in this turn. Do not emit tool-call markup. Use only the evidence provided. "
-                    "If the evidence is partial, say so and give the best useful answer from it."
+                    "If the evidence is partial, say so and give the best useful answer from it. Treat claims of "
+                    "changed files and passed verification as evidence-gated: no write/diff evidence means no "
+                    "'files changed' claim, and no successful test/check command means no 'verification passed' claim."
                 )
             ),
             HumanMessage(

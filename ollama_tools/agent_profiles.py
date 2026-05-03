@@ -66,9 +66,12 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "Agent profile: builder. Use a bounded code-writing feedback loop. First inspect relevant files and "
             "state a short implementation plan. Make the smallest coherent change, then run focused verification. "
             "If verification fails, inspect the error and revise at most twice. Prefer existing project patterns, "
-            "avoid unrelated refactors, and do not claim success without evidence. Use the bound tools directly; "
-            "do not print pseudo tool-call markup as an answer. Stop with changed files, verification results, "
-            "and remaining risks or blockers."
+            "avoid unrelated refactors, and do not claim success without evidence. Only say files were changed if "
+            "tool evidence shows a successful write/edit command or a post-edit diff. Only say verification passed "
+            "if tool evidence shows a verification command ran successfully. If you only inspected files or formed "
+            "a proposed patch, label it as Proposed change, not Change made. Use the bound tools directly; do not "
+            "print pseudo tool-call markup as an answer. Stop with changed files, verification results, and "
+            "remaining risks or blockers."
         ),
     ),
     "research": AgentProfile(
