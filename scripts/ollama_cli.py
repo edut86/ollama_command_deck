@@ -104,7 +104,8 @@ def _system_prompt(personality: str, agent_profile: str, user_text: str = "") ->
             f"\n\nBuilder workspace: the configured work directory is `{get_work_dir()}`. "
             "Inspect and edit only inside this directory. If the user asks for a path outside this directory, "
             "stop and report the configuration mismatch; do not fall back to inspecting `/app`, sibling repos, "
-            "or parent workspace directories."
+            "or parent workspace directories. In the Web TUI, `BUILDER_RUN.md` is a runtime-managed log; "
+            "do not create it yourself or require shell write evidence for it."
         )
     return (
         "Your name is Lilith. You are the headless CLI agent for Ollama Command Deck.\n"

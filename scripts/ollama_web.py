@@ -798,7 +798,8 @@ def build_system_prompt(
             f"\n\nBuilder workspace: the configured work directory is `{get_work_dir()}`. "
             "Inspect and edit only inside this directory. If the user asks for a path outside this directory, "
             "stop and report the configuration mismatch; do not fall back to inspecting `/app`, sibling repos, "
-            "or parent workspace directories."
+            "or parent workspace directories. The Web runtime creates and appends `BUILDER_RUN.md` automatically; "
+            "do not create it yourself, and do not report it missing just because no shell write command created it."
         )
     prompt += context_prompt(ROOT, agent_profile, user_text)
     if CHAT_MODES[mode]:
@@ -1064,8 +1065,23 @@ def stream_chat_events(payload: dict[str, Any]):
                 builder_log_path, builder_log_error = _builder_log_start(model, agent_text, context_selection.paths)
                 if builder_log_path:
                     yield {"type": "cmd", "command": f"Builder run log: {builder_log_path}"}
+                    agent_messages.insert(
+                        -1,
+                        {
+                            "role": "system",
+                            "content": (
+                                f"The Web runtime has already created or opened the Builder run log at {builder_log_path}. "
+                                "Treat this as runtime evidence. Do not create that file yourself and do not mark it "
+                                "missing in the final answer unless the runtime reported an error."
+                            ),
+                        },
+                    )
                 elif builder_log_error:
                     yield {"type": "cmd", "command": builder_log_error}
+                    agent_messages.insert(
+                        -1,
+                        {"role": "system", "content": f"Builder run log error: {builder_log_error}"},
+                    )
             enforce_work_dir = context_selection.active_profile == "builder"
             for event in stream_langchain_agent_events(
                 model,

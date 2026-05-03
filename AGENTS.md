@@ -49,6 +49,8 @@ When `builder` runs from the Web TUI, it appends `BUILDER_RUN.md` in the
 configured work directory. The log records the prompt, commands, tool results,
 final answer, and errors, which makes read-only inspections visible even when no
 project file has been modified yet.
+The runtime manages this file directly; Builder should not try to create it with
+shell commands or mark it missing because no shell command wrote it.
 
 Builder also asks the local-command tool to enforce the configured work
 directory even when dangerous mode is enabled. Other profiles keep the normal
