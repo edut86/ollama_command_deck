@@ -1095,15 +1095,19 @@ def chat_messages_from_payload(payload: dict[str, Any], text: str) -> list[dict[
     history = payload.get("messages") if isinstance(payload.get("messages"), list) else []
     messages: list[dict[str, str]] = [{"role": "system", "content": build_system_prompt(chat_mode, personality, agent_profile, text, assistant_name)}]
     if canvas_requested:
-        messages.append({
-            "role": "system",
-            "content": (
-                "The user explicitly requested a canvas document. Return the complete content as a "
-                "standalone Markdown document suitable for direct insertion into the canvas. "
-                "Do not include chat transcript labels, tool logs, or meta commentary such as "
-                "'here is the content for the canvas'."
-            ),
-        })
+        canvas_instruction = (
+            "The user explicitly requested a canvas document. Return the complete content as a "
+            "standalone Markdown document suitable for direct insertion into the canvas. "
+            "Do not include chat transcript labels, tool logs, or meta commentary such as "
+            "'here is the content for the canvas'."
+        )
+        if agent_profile == "deep_research":
+            canvas_instruction += (
+                " For deep research, the document must be a detailed report with a title, executive summary, "
+                "key findings, detailed analysis, risks/gaps, recommendations, and sources/notes. Cite source "
+                "URLs with Markdown links when tool evidence provides them. Do not invent citations."
+            )
+        messages.append({"role": "system", "content": canvas_instruction})
     for item in history[-30:]:
         if isinstance(item, dict) and item.get("role") in {"user", "assistant", "system"}:
             messages.append({"role": str(item["role"]), "content": str(item.get("content", ""))})
@@ -1267,7 +1271,12 @@ def stream_chat_events(payload: dict[str, Any]):
             agent_text = text[len("/agent "):].strip() if text.startswith("/agent ") else text
             agent_messages = messages[:-1] + [{"role": "user", "content": agent_text}]
             final_event: dict[str, Any] = {}
-            tool_rounds = 20 if context_selection.active_profile == "builder" else 4
+            if context_selection.active_profile == "builder":
+                tool_rounds = 20
+            elif context_selection.active_profile == "deep_research":
+                tool_rounds = 12
+            else:
+                tool_rounds = 4
             if context_selection.active_profile == "builder":
                 builder_log_path, builder_log_error = _builder_log_start(model, agent_text, context_selection.paths)
                 if builder_log_path:
@@ -2545,6 +2554,7 @@ INDEX_HTML = r"""<!doctype html>
           <option value="code">Agent: Code</option>
           <option value="builder">Agent: Builder</option>
           <option value="research">Agent: Research</option>
+          <option value="deep_research">Agent: Deep Research</option>
           <option value="writing">Agent: Writing</option>
           <option value="brief">Agent: Brief</option>
           <option value="debug">Agent: Debug</option>
@@ -4494,6 +4504,13 @@ INDEX_HTML = r"""<!doctype html>
       const displayText = text || (pendingAttachment ? `[${pendingAttachment.filename}]` : "");
       addMessage("You", displayText, "user");
       step("Preparing request");
+      const deepResearchMode = state.agentProfile === "deep_research";
+      if (deepResearchMode) {
+        state.agentMode = true;
+        updateStatus();
+        setCanvasOpen(true);
+        step("Deep Research profile active; final report will replace canvas");
+      }
       if (pendingAttachment?.type === "image") {
         const img = document.createElement("img");
         img.src = "data:" + pendingAttachment.mime + ";base64," + pendingAttachment.data;
@@ -4502,7 +4519,7 @@ INDEX_HTML = r"""<!doctype html>
         chat.scrollTop = chat.scrollHeight;
         step(`Attached image: ${pendingAttachment.filename || "image"}`);
       }
-      const canvasRequested = shouldAutoCanvas(text);
+      const canvasRequested = deepResearchMode || shouldAutoCanvas(text);
       const attachment = pendingAttachment;
       // Pass canvas content to server when user asks to check/edit/update it
       const CANVAS_AI_KEYWORDS = /\b(canvas|check|update|edit|rewrite|revise|improve|summarize|extend|read|document|fix|clean|format|translate|shorten|expand|what.s in|what is)\b/i;

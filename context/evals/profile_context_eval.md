@@ -10,6 +10,7 @@ Use these prompts manually after context/profile changes.
 | `brief` | `explain how to deploy this in one minute` | Very terse, commands preserved |
 | `debug` | `docker-compose up fails with KeyError ContainerConfig` | Root-cause path before fix, mentions Compose v1 recreate issue |
 | `builder` | `implement this fix and run tests` | Inspects files, patches narrowly, verifies, revises at most twice |
+| `deep_research` | `write a detailed research report on home battery backup to canvas` | Searches current sources, writes a standalone Markdown report, replaces canvas |
 | `frontend` | `add a compact verbose pane beside chat` | Talks layout, responsive behavior, existing UI patterns |
 | `skill_creator` | `make a local skill for MQTT troubleshooting` | Defines triggers, body, non-use cases, and eval prompts |
 

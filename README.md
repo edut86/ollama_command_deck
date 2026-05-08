@@ -313,7 +313,7 @@ your mail store.
 ## Agent Profiles
 
 Ollama Command Deck includes lightweight subagent-style profiles: `general`, `ops`,
-`home`, `code`, `builder`, `research`, `writing`, `brief`, `debug`,
+`home`, `code`, `builder`, `research`, `deep_research`, `writing`, `brief`, `debug`,
 `frontend`, and `skill_creator`. They are focused prompt/tool/context profiles, not parallel
 always-on workers, so they fit smaller local Ollama systems better.
 
@@ -323,10 +323,17 @@ Use the Web TUI `Agent:` dropdown, `/agent_profile ops`, or the CLI flag:
 ./scripts/ollama_cli.py --agent-profile ops --json "check health on mqtt-node"
 ./scripts/ollama_cli.py --agent-profile home --json "make a Home Assistant sensor for Lilith health"
 ./scripts/ollama_cli.py --agent-profile builder "implement this fix and run checks"
+./scripts/ollama_cli.py --agent-profile deep_research "write a detailed research report on local LLM home automation"
 ./scripts/ollama_cli.py --agent-profile debug "docker-compose up is failing with ContainerConfig"
 ```
 
 See [AGENTS.md](AGENTS.md) for profile behavior and limitations.
+
+The Web TUI **Agent: Deep Research** profile is designed for report writing.
+When selected, the next prompt runs in agent/tool mode and automatically replaces
+the document canvas with a standalone Markdown report. It uses the web search
+tool when enabled, cites source links when tool evidence provides them, and
+structures the result with summary, findings, analysis, gaps, and next steps.
 
 When the Web TUI runs the `builder` profile, it appends a live Markdown trail to
 `BUILDER_RUN.md` in the configured work directory. That file records the prompt,

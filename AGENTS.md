@@ -17,6 +17,7 @@ running several model generations at once.
 | `code` | Repo inspection, implementation planning, patches, tests |
 | `builder` | Bounded code-writing feedback loop: inspect, patch, verify, revise, report |
 | `research` | Search-backed summaries, documentation lookup, comparisons |
+| `deep_research` | Web-backed detailed research reports written directly to canvas |
 | `writing` | Humanized docs, status notes, explanations, polished prose |
 | `brief` | Terse answers that preserve commands, facts, and risks |
 | `debug` | Root-cause debugging for build, runtime, and integration failures |
@@ -35,6 +36,7 @@ Slash command:
 /agent_profile code
 /agent_profile builder
 /agent_profile research
+/agent_profile deep_research
 /agent_profile writing
 /agent_profile brief
 /agent_profile debug
@@ -76,6 +78,7 @@ When `general` is selected, obvious prompts are routed automatically:
 | humanize, rewrite, polish prose | `writing` |
 | shorter, terse, caveman | `brief` |
 | skill docs, trigger rules, eval prompts | `skill_creator` |
+| deep research, research report, detailed report, canvas report | `deep_research` |
 | search, latest, current docs | `research` |
 
 The verbose pane shows the active profile, route reason, and context files for
@@ -90,6 +93,7 @@ The headless CLI accepts `--agent-profile`:
 ./scripts/ollama_cli.py --agent-profile home --json "write a Home Assistant sensor for mqtt-node health"
 ./scripts/ollama_cli.py --agent-profile code "look over this repo and suggest the next small fix"
 ./scripts/ollama_cli.py --agent-profile builder "implement this fix and run checks"
+./scripts/ollama_cli.py --agent-profile deep_research "write a detailed research report on local LLM home automation"
 ./scripts/ollama_cli.py --agent-profile frontend "tighten the verbose pane layout"
 ./scripts/ollama_cli.py --agent-profile skill_creator "draft an MQTT troubleshooting skill"
 ./scripts/ollama_cli.py --agent-profile caveman "say this shorter"
@@ -138,6 +142,7 @@ prompt.
 | `context/docs/devices.md` | All profiles |
 | `context/docs/ops-runbook.md` | `ops`, ops-like prompts |
 | `context/docs/home-assistant.md` | `home`, Home Assistant/MQTT prompts |
+| `context/docs/research-report.md` | `deep_research`, detailed report prompts |
 | `context/skills/humanizer.md` | `writing`, prose/humanize prompts |
 | `context/skills/caveman.md` | `brief` |
 | `context/skills/systematic-debugging.md` | `debug`, `ops`, `code`, `builder`, bug/error/build prompts |
@@ -150,6 +155,7 @@ Aliases:
 |---|---|
 | `caveman` | `brief` |
 | `humanizer` | `writing` |
+| `deep-research` | `deep_research` |
 | `systematic-debugging` | `debug` |
 | `skill-creator` | `skill_creator` |
 
@@ -177,6 +183,7 @@ The next upgrade would be a small router that chooses a profile automatically:
 | Repo files, bugs, tests, patches | `code` |
 | Implementing fixes/features with verification | `builder` |
 | Current docs, comparisons, web facts | `research` |
+| Detailed web-backed reports for canvas | `deep_research` |
 
 Keep the first version deterministic and visible: show the selected profile in
 the verbose pane before running the agent.

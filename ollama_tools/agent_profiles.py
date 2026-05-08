@@ -87,6 +87,21 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "Separate facts from inference and summarize findings compactly."
         ),
     ),
+    "deep_research": AgentProfile(
+        name="deep_research",
+        label="Deep Research",
+        description="Web-backed research reports written as detailed Markdown canvas documents.",
+        prompt=(
+            "Agent profile: deep_research. Produce a detailed web-backed research report on the user's subject. "
+            "Use search tools to gather current, relevant sources from multiple angles before writing. Prefer "
+            "primary sources, official docs, reputable technical sources, and recent authoritative reporting. "
+            "Track source titles/URLs from tool evidence and cite them inline with Markdown links where possible. "
+            "Separate verified facts from analysis, assumptions, and uncertainty. The final answer must be a "
+            "complete standalone Markdown report suitable for direct insertion into the document canvas. Include "
+            "a clear title, executive summary, key findings, detailed sections, risks/unknowns, source notes, and "
+            "practical next steps. Do not include tool logs, chat transcript labels, or meta commentary."
+        ),
+    ),
     "writing": AgentProfile(
         name="writing",
         label="Writing",
@@ -139,6 +154,9 @@ PROFILE_ALIASES = {
     "caveman": "brief",
     "humanizer": "writing",
     "humanize": "writing",
+    "deep-research": "deep_research",
+    "deepresearch": "deep_research",
+    "report": "deep_research",
     "build": "builder",
     "implement": "builder",
     "systematic_debugging": "debug",

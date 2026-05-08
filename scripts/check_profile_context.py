@@ -21,6 +21,8 @@ CASES = [
     ("general", "docker-compose up fails with KeyError ContainerConfig", "debug", "skills/systematic-debugging.md"),
     ("general", "implement this fix and run tests", "builder", "skills/systematic-debugging.md"),
     ("builder", "add a small feature and verify it", "builder", "skills/systematic-debugging.md"),
+    ("general", "write a detailed research report on home battery backup to canvas", "deep_research", "docs/research-report.md"),
+    ("deep_research", "solar inverter market trends", "deep_research", "docs/research-report.md"),
     ("general", "add a compact verbose pane beside chat", "frontend", "skills/frontend-design.md"),
     ("general", "make a local skill for MQTT troubleshooting", "skill_creator", "skills/skill-creator.md"),
     ("ops", "make this shorter", "ops", "docs/ops-runbook.md"),
