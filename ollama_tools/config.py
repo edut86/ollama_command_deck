@@ -335,10 +335,10 @@ def get_whisper_model() -> str:
     return _get("stt", "whisper_model", "medium")
 
 def get_whisper_device() -> str:
-    return _get("stt", "whisper_device", "cuda")
+    return _get("stt", "whisper_device", "auto")
 
 def get_whisper_device_index() -> int:
     try:
-        return int(_get("stt", "whisper_device_index", "1"))
+        return int(_get("stt", "whisper_device_index", "0"))
     except ValueError:
-        return 1
+        return 0

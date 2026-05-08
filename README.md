@@ -394,9 +394,11 @@ Set via the Mode dropdown or `/chat_mode <mode>`:
 ### Voice Input
 
 The microphone button records browser audio and sends it to `/api/transcribe`.
-It appears in the footer at all times, but is disabled until server-side STT is
-available. Install the optional GPU dependencies from `requirements-gpu.txt`
-or otherwise provide `faster-whisper`, then configure `[stt]` if needed.
+It appears in the footer at all times. The Docker image includes
+`faster-whisper` and the system library it needs, so STT works standalone on CPU
+by default after the Whisper model downloads into the container's `/data` home.
+For CUDA acceleration, set `[stt] whisper_device = "cuda"` and run the container
+with NVIDIA GPU access.
 
 Click **Chat / Voice**, then click the mic to start recording and click again to
 stop. Use the **Auto-send** checkbox next to the mic to submit transcribed text
@@ -591,6 +593,12 @@ page, set the Piper / Kokoro URL to:
 ```text
 http://piper:8880
 ```
+
+The Web image also includes server-side speech-to-text. First use downloads the
+configured Whisper model (`medium` by default) under `/data` because the
+container home is `/data`; the named data volume keeps it between restarts.
+Default STT device is `auto`, which falls back to CPU when CUDA is not
+available.
 
 ---
 

@@ -1,4 +1,5 @@
 edge-tts
+faster-whisper
 langchain
 langchain-ollama
 mcp

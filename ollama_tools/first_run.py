@@ -122,6 +122,12 @@ key_file = ""
 [tts]
 piper_url = {_quote(piper_url.rstrip("/"))}
 
+[stt]
+enabled = true
+whisper_model = "medium"
+whisper_device = "auto"
+whisper_device_index = 0
+
 [thunderbird]
 enabled = {str(enable_thunderbird).lower()}
 token_file = {_quote(str(thunderbird_token_path))}
