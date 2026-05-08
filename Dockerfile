@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
     libgomp1 \
+    openssl \
     openssh-client \
     tini \
     && rm -rf /var/lib/apt/lists/*
@@ -41,7 +42,7 @@ ENV OLLAMA_HOOKS_CONFIG=/config/config.toml \
     HOME=/data
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3).read()"
+    CMD python -c "import os, ssl, urllib.request; scheme='https' if os.environ.get('WEB_CERT_FILE') and os.environ.get('WEB_KEY_FILE') else 'http'; ctx=ssl._create_unverified_context() if scheme == 'https' else None; urllib.request.urlopen(f'{scheme}://127.0.0.1:8765/healthz', timeout=3, context=ctx).read()"
 
 ENTRYPOINT ["tini", "--"]
 CMD ["python", "scripts/ollama_web.py"]

@@ -18,6 +18,7 @@ import threading
 import urllib.error
 import urllib.request
 import wave
+import ipaddress
 from dataclasses import asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -323,10 +324,94 @@ from scripts.ollama_tui import (  # noqa: E402
 )
 
 
+def _auto_tls_enabled() -> bool:
+    return os.environ.get("OLLAMA_WEB_AUTO_TLS", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _local_tls_names() -> tuple[list[str], list[str]]:
+    dns_names = {"localhost", socket.gethostname()}
+    ip_addrs = {"127.0.0.1"}
+    try:
+        dns_names.add(socket.getfqdn())
+    except Exception:
+        pass
+    for item in os.environ.get("OLLAMA_WEB_TLS_HOSTS", "").split(","):
+        item = item.strip()
+        if item:
+            try:
+                ip_addrs.add(str(ipaddress.ip_address(item)))
+            except ValueError:
+                dns_names.add(item)
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip_addrs.add(sock.getsockname()[0])
+    except Exception:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, family=socket.AF_INET):
+            ip_addrs.add(info[4][0])
+    except Exception:
+        pass
+    return sorted(name for name in dns_names if name), sorted(ip_addrs)
+
+
+def _ensure_auto_tls_cert(cert_file: str, key_file: str) -> None:
+    cert_path = Path(cert_file)
+    key_path = Path(key_file)
+    dns_names, ip_addrs = _local_tls_names()
+    san_parts = [f"DNS:{name}" for name in dns_names]
+    san_parts.extend(f"IP:{ip}" for ip in ip_addrs)
+    san_text = ",".join(san_parts)
+    marker_path = cert_path.with_suffix(cert_path.suffix + ".hosts")
+    if cert_path.exists() and key_path.exists() and marker_path.exists():
+        if marker_path.read_text(encoding="utf-8", errors="ignore").strip() == san_text:
+            return
+    openssl = shutil.which("openssl")
+    if not openssl:
+        raise RuntimeError("OLLAMA_WEB_AUTO_TLS is enabled, but openssl is not installed in the container.")
+    cert_path.parent.mkdir(parents=True, exist_ok=True)
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            openssl,
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-sha256",
+            "-days",
+            "825",
+            "-keyout",
+            str(key_path),
+            "-out",
+            str(cert_path),
+            "-subj",
+            "/CN=Ollama Command Deck",
+            "-addext",
+            "subjectAltName=" + san_text,
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    try:
+        key_path.chmod(0o600)
+        cert_path.chmod(0o644)
+    except OSError:
+        pass
+    marker_path.write_text(san_text + "\n", encoding="utf-8")
+    print(f"[web] Generated self-signed HTTPS cert at {cert_path}", file=sys.stderr)
+
+
 HOST = get_web_host()
 PORT = get_web_port()
 CERT_FILE = get_web_cert_file()
 KEY_FILE = get_web_key_file()
+if _auto_tls_enabled() and CERT_FILE and KEY_FILE:
+    _ensure_auto_tls_cert(CERT_FILE, KEY_FILE)
 TLS_ENABLED = bool(CERT_FILE and KEY_FILE)
 
 # ── Vision / multi-modal helpers ──────────────────────────────────────────────

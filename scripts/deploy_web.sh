@@ -16,6 +16,22 @@ fi
 
 echo "Using ${COMPOSE[*]} (${COMPOSE_KIND})"
 
+if [[ -z "${OLLAMA_WEB_TLS_HOSTS:-}" ]]; then
+  tls_hosts=("localhost" "$(hostname)")
+  if command -v hostname >/dev/null 2>&1; then
+    while read -r ip; do
+      [[ -n "$ip" ]] && tls_hosts+=("$ip")
+    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    while read -r ip; do
+      [[ -n "$ip" ]] && tls_hosts+=("$ip")
+    done < <(ip -o -4 addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]}' || true)
+  fi
+  OLLAMA_WEB_TLS_HOSTS="$(printf '%s\n' "${tls_hosts[@]}" | awk 'NF && !seen[$0]++' | paste -sd, -)"
+  export OLLAMA_WEB_TLS_HOSTS
+fi
+
 STT_MODE="${STT_MODE:-auto}"
 COMPOSE_FILES=(-f docker-compose.yml)
 if [[ -f docker-compose.override.yml ]]; then
@@ -48,3 +64,14 @@ fi
 
 "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" up -d piper web
 "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" ps piper web
+
+scheme="http"
+if "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" config 2>/dev/null | grep -q "WEB_CERT_FILE:"; then
+  scheme="https"
+fi
+echo
+echo "Open Command Deck at ${scheme}://localhost:8765"
+if [[ "$scheme" == "https" ]]; then
+  echo "For microphone access from another device, use https://<this-host-or-ip>:8765 and accept/trust the self-signed certificate."
+  echo "Certificate names/IPs: ${OLLAMA_WEB_TLS_HOSTS:-localhost}"
+fi

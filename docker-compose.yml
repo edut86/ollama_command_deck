@@ -36,6 +36,10 @@ services:
       OLLAMA_HOOKS_CONFIG: /config/config.toml
       OLLAMA_HOOKS_DATA_DIR: /data
       OLLAMA_WEB_NO_VENV: "1"
+      OLLAMA_WEB_AUTO_TLS: "1"
+      OLLAMA_WEB_TLS_HOSTS: ${OLLAMA_WEB_TLS_HOSTS:-}
+      WEB_CERT_FILE: /config/tls/command-deck.crt
+      WEB_KEY_FILE: /config/tls/command-deck.key
       # Uses the bundled piper service for offline TTS when voices are present.
       KOKORO_URL: http://piper:8880
 

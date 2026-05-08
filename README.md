@@ -29,7 +29,9 @@ If you skip the script's deploy prompt, start it manually:
 ./scripts/deploy_web.sh
 ```
 
-Open `http://localhost:8765`; the first-run setup wizard appears.
+Open `https://localhost:8765`; the first-run setup wizard appears. Docker
+generates a local self-signed certificate on first start, so your browser may
+ask you to accept/trust it.
 
 ### Local Python Setup
 
@@ -406,10 +408,12 @@ immediately after transcription. Clicking the mic also leaves Agent mode and use
 the conversation prompt. If STT is unavailable, clicking the mic shows the setup
 error in chat instead of silently doing nothing.
 
-Browsers only expose microphone capture in a secure context. Use
-`http://localhost:8765` on the same machine, or configure HTTPS with `[web]
-cert_file` and `key_file` when connecting from another device or LAN hostname.
-Plain `http://<LAN-IP>:8765` will not provide `navigator.mediaDevices`.
+Browsers only expose microphone capture in a secure context. Docker deployments
+enable HTTPS automatically by setting `WEB_CERT_FILE` and `WEB_KEY_FILE` and
+generating a self-signed certificate under `/config/tls` when needed. Use
+`https://localhost:8765` on the same machine, or `https://<LAN-IP>:8765` from
+another device and accept/trust the certificate. Plain `http://<LAN-IP>:8765`
+will not provide `navigator.mediaDevices`.
 
 ### Personalities
 
