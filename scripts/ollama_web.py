@@ -267,6 +267,40 @@ def tts_speak(
     detail = f" Last local TTS error: {last_error}" if last_error else ""
     raise RuntimeError("No working TTS backend available. Install edge-tts, configure Piper/Kokoro, or download Piper voices." + detail)
 
+
+def clean_text_for_tts(text: str) -> str:
+    """Convert markdown-heavy assistant output into speech-friendly text."""
+    text = re.sub(r"```[\s\S]*?```", " Code block omitted. ", text or "")
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    lines: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        line = re.sub(r"[✅❌⚠️✔✖✗✓]", "", line)
+        if not line:
+            lines.append("")
+            continue
+        if re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", line):
+            continue
+        if "|" in line and line.count("|") >= 2:
+            cells = [cell.strip() for cell in line.strip("|").split("|") if cell.strip()]
+            if cells:
+                lines.append("; ".join(cells) + ".")
+            continue
+        line = re.sub(r"^#{1,6}\s*", "", line)
+        line = re.sub(r"^\s*[-*+]\s+", "", line)
+        line = re.sub(r"^\s*\d+[.)]\s+", "", line)
+        line = re.sub(r"^\s*>\s?", "", line)
+        line = re.sub(r"[*_~]{1,3}", "", line)
+        line = re.sub(r"\s{2,}", " ", line)
+        if line:
+            lines.append(line)
+    cleaned = "\n".join(lines)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+    return cleaned
+
 import base64
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2958,9 +2992,9 @@ INDEX_HTML = r"""<!doctype html>
     });
 
     function scheduleVoiceConversationRestart(delay = 850) {
-      if (!voiceConversationActive || !state.voiceAutoSend || currentController || voiceIsRecording()) return;
+      if (!voiceConversationActive || !state.voiceAutoSend || currentController || voiceIsRecording() || activeAudio) return;
       setTimeout(() => {
-        if (voiceConversationActive && state.voiceAutoSend && !currentController && !voiceIsRecording()) {
+        if (voiceConversationActive && state.voiceAutoSend && !currentController && !voiceIsRecording() && !activeAudio) {
           startVoiceRecording(true);
         }
       }, delay);
@@ -3098,7 +3132,7 @@ INDEX_HTML = r"""<!doctype html>
           state.chatMode = "conversation";
           updateStatus();
           setVoiceConversationActive(true);
-          addMessage("Tool", "Voice conversation mode listening. Speak naturally; I will send after a short pause.", "tool");
+          addMessage("Tool", "Voice conversation mode listening. Speak naturally; I will send after a short pause and read replies aloud.", "tool");
           await startVoiceRecording(true);
         }
         return;
@@ -3964,8 +3998,44 @@ INDEX_HTML = r"""<!doctype html>
       label.append(replaceCanvasBtn);
     }
 
+    function cleanTextForTts(text) {
+      const lines = String(text || "")
+        .replace(/```[\s\S]*?```/g, " Code block omitted. ")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .split(/\r?\n/);
+      const out = [];
+      for (let line of lines) {
+        line = line.trim();
+        line = line.replace(/[✅❌⚠️✔✖✗✓]/g, "");
+        if (!line) {
+          out.push("");
+          continue;
+        }
+        if (/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line)) continue;
+        if (line.includes("|") && (line.match(/\|/g) || []).length >= 2) {
+          const cells = line.split("|").map(c => c.trim()).filter(Boolean);
+          if (cells.length) out.push(cells.join("; ") + ".");
+          continue;
+        }
+        line = line
+          .replace(/^#{1,6}\s*/, "")
+          .replace(/^\s*[-*+]\s+/, "")
+          .replace(/^\s*\d+[.)]\s+/, "")
+          .replace(/^\s*>\s?/, "")
+          .replace(/[*_~]{1,3}/g, "")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+        if (line) out.push(line);
+      }
+      return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]+/g, " ").trim();
+    }
+
     async function speakText(text, btn) {
       stopTts();
+      text = cleanTextForTts(text);
+      if (!text) return;
       const voice = voiceSelect.value || "preset:lilith_dark";
       const rate = parseInt(ttsRate.value, 10);
       const rateStr = (rate >= 0 ? "+" : "") + rate + "%";
@@ -3992,15 +4062,26 @@ INDEX_HTML = r"""<!doctype html>
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         activeAudio = audio;
-        audio.onended = audio.onerror = () => {
-          URL.revokeObjectURL(url);
-          if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
-          activeTtsBtn = null;
-          activeAudio = null;
-        };
-        audio.play();
+        await new Promise((resolve, reject) => {
+          audio.onended = () => {
+            URL.revokeObjectURL(url);
+            if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
+            activeTtsBtn = null;
+            activeAudio = null;
+            resolve();
+          };
+          audio.onerror = () => {
+            URL.revokeObjectURL(url);
+            if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
+            activeTtsBtn = null;
+            activeAudio = null;
+            reject(new Error("audio playback failed"));
+          };
+          audio.play().catch(reject);
+        });
       } catch (err) {
         if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
+        activeAudio = null;
         activeTtsBtn = null;
         addMessage("Error", "TTS failed: " + err, "error");
       }
@@ -4542,6 +4623,10 @@ INDEX_HTML = r"""<!doctype html>
         if (answerText) {
           lastAnswerText = answerText;
           readLastBtn.disabled = false;
+          if (voiceConversationActive && state.voiceAutoSend) {
+            step("Reading assistant response aloud");
+            await speakText(answerText);
+          }
           if (canvasRequested) {
             const mode = canvasModeFor(text);
             const canvasText = String(answerText || "").trim();
@@ -5405,7 +5490,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.respond_json({"ok": False, "error": "payload too large"}, status=413)
                     return
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                text = str(payload.get("text", "")).strip()[:4000]
+                text = clean_text_for_tts(str(payload.get("text", "")).strip())[:4000]
                 # Whitelist voice to known safe names only
                 local_voices = _PIPER_DYNAMIC_VOICE_NAMES or _PIPER_LAST_VOICE_NAMES
                 valid_voices = _EDGE_VOICE_NAMES | local_voices | {"preset:lilith_dark"}
