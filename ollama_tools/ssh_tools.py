@@ -19,6 +19,16 @@ class SshHost:
     user: str | None = None
 
 
+@dataclass(frozen=True)
+class SshConfigStatus:
+    path: str
+    exists: bool
+    size: int
+    host_count: int
+    message: str
+    fix: str
+
+
 def _ssh_config_path(path: str | None = None) -> Path:
     configured = path or get_ssh_config_path()
     return Path(configured).expanduser() if configured else Path.home() / ".ssh" / "config"
@@ -69,6 +79,43 @@ def parse_ssh_config(path: str | None = None) -> list[SshHost]:
     return sorted(unique.values(), key=lambda item: item.alias)
 
 
+def ssh_config_status(path: str | None = None) -> SshConfigStatus:
+    """Return a user-facing diagnostic for the configured SSH alias file."""
+    config_path = _ssh_config_path(path)
+    hosts = parse_ssh_config(str(config_path))
+    exists = config_path.exists()
+    size = config_path.stat().st_size if exists else 0
+    if hosts:
+        message = f"Found {len(hosts)} SSH host alias(es) in {config_path}."
+        fix = "Use /hosts to list aliases, then /ssh <alias> <command> to run a remote command."
+    elif not exists:
+        message = f"SSH config file was not found at {config_path}."
+        fix = (
+            "Mount your host ~/.ssh into the container, or create this file with a Host block. "
+            "For the common Docker setup where /data is your host home, use /data/.ssh/config."
+        )
+    elif size == 0:
+        message = f"SSH config file exists at {config_path}, but it is empty."
+        fix = (
+            "Add a Host block such as: Host server1; HostName <ip-or-dns>; "
+            "User <user>; IdentityFile /data/.ssh/<key>."
+        )
+    else:
+        message = f"SSH config file exists at {config_path}, but no usable Host aliases were found."
+        fix = (
+            "Add a non-wildcard Host block. Wildcards like Host * are ignored because they are defaults, "
+            "not device aliases."
+        )
+    return SshConfigStatus(
+        path=str(config_path),
+        exists=exists,
+        size=size,
+        host_count=len(hosts),
+        message=message,
+        fix=fix,
+    )
+
+
 def _resolve_container_hostname(hostname: str | None) -> str | None:
     """Return a hostname override for container DNS edge cases.
 
@@ -102,7 +149,10 @@ def run_ssh_command(host: str, command: str, timeout: int = 60) -> subprocess.Co
     config_path = _ssh_config_path()
     known_hosts_path = _ssh_known_hosts_path()
     configured_hosts = {item.alias: item for item in parse_ssh_config(str(config_path))}
-    if configured_hosts and host not in configured_hosts:
+    if not configured_hosts:
+        status = ssh_config_status(str(config_path))
+        raise ValueError(f"No SSH aliases are configured. {status.message} Fix: {status.fix}")
+    if host not in configured_hosts:
         raise ValueError(f"SSH host '{host}' is not listed in {config_path}.")
     ssh_cmd = ["ssh", "-o", "BatchMode=yes"]
     if config_path.exists():

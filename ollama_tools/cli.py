@@ -18,7 +18,7 @@ from .monitoring import (
 from .ollama_api import list_models
 from .safety import UnsafeCommandError
 from .shell_tools import run_local_command
-from .ssh_tools import parse_ssh_config, run_ssh_command
+from .ssh_tools import parse_ssh_config, run_ssh_command, ssh_config_status
 from .time_tools import current_time
 from .web_search import search_web
 
@@ -87,7 +87,8 @@ def main() -> int:
                 print(result.stderr, end="", file=sys.stderr)
             return result.returncode
         elif args.command == "ssh-hosts":
-            print(json.dumps([host.__dict__ for host in parse_ssh_config()], indent=2))
+            hosts = parse_ssh_config()
+            print(json.dumps({"hosts": [host.__dict__ for host in hosts], "config": ssh_config_status().__dict__}, indent=2))
         elif args.command == "run-ssh":
             result = run_ssh_command(args.host, args.shell_command, timeout=args.timeout)
             print(result.stdout, end="")

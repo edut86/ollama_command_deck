@@ -635,6 +635,37 @@ with `STT_MODE=cpu ./scripts/deploy_web.sh` or `STT_MODE=gpu ./scripts/deploy_we
 | `/clear` | Clear chat history |
 | `/quit` | Exit |
 
+### SSH Host Setup
+
+The Docker setup helper can mount your SSH files and add a first host alias:
+
+```bash
+./scripts/setup_docker_paths.sh
+```
+
+Recommended choices for normal local use:
+
+| Prompt | Choice |
+|---|---|
+| Data / agent home | Bind mount current user's home |
+| Workspace | Bind mount `~/git` or your project folder |
+| SSH access | Use `/data/.ssh` from the data mount |
+
+With that setup, the container reads `/data/.ssh/config`, which is your host
+`/home/<you>/.ssh/config`. If no aliases are found, the setup helper offers to
+append a block like this:
+
+```sshconfig
+Host server1
+  HostName 192.0.2.10
+  User edut
+  IdentityFile /data/.ssh/id_ed25519
+  IdentitiesOnly yes
+```
+
+Then use `/hosts` in the Web UI. It should list `server1`, and `/ssh
+server1 "hostname && uptime"` should run against that host.
+
 ---
 
 ## Security

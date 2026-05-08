@@ -18,7 +18,7 @@ from .monitoring import (
     prometheus_query_range,
 )
 from .shell_tools import run_local_command
-from .ssh_tools import parse_ssh_config, run_ssh_command
+from .ssh_tools import parse_ssh_config, run_ssh_command, ssh_config_status
 from .time_tools import current_time
 from .tool_registry import tool_enabled
 from .web_search import search_web
@@ -99,8 +99,16 @@ def _build_tools(enforce_work_dir: bool = False) -> list[Any]:
 
     @tool
     def list_ssh_hosts() -> str:
-        """List SSH host aliases from the user's ~/.ssh/config."""
-        return json.dumps([host.__dict__ for host in parse_ssh_config()], indent=2)
+        """List SSH host aliases and explain the configured SSH path when none are found."""
+        hosts = parse_ssh_config()
+        status = ssh_config_status()
+        return json.dumps(
+            {
+                "hosts": [host.__dict__ for host in hosts],
+                "config": status.__dict__,
+            },
+            indent=2,
+        )
 
     @tool
     def local_command(command: str, timeout: int = 60) -> str:

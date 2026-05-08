@@ -37,7 +37,7 @@ from ollama_tools.langchain_orchestrator import (
 )
 from ollama_tools.monitoring import mqtt_ssh_snapshot
 from ollama_tools.shell_tools import run_local_command
-from ollama_tools.ssh_tools import parse_ssh_config, run_ssh_command
+from ollama_tools.ssh_tools import parse_ssh_config, run_ssh_command, ssh_config_status
 from ollama_tools.web_search import search_web
 
 # ── Live GPU poller ───────────────────────────────────────────────────────────
@@ -632,7 +632,12 @@ def run_tool_command(user_text: str) -> tuple[str, str, str | None] | None:
     if user_text == "/hosts":
         hosts = parse_ssh_config()
         if not hosts:
-            return ("Tool", "No SSH hosts found in ~/.ssh/config.", None)
+            status = ssh_config_status()
+            return (
+                "Tool",
+                f"{status.message}\n\nFix: {status.fix}",
+                None,
+            )
         lines = []
         for host in hosts:
             target = host.hostname or ""
@@ -983,7 +988,8 @@ def run_all_online_check(user_text: str) -> tuple[str, str, str | None] | None:
         return None
     hosts = parse_ssh_config()
     if not hosts:
-        return ("Tool", "No SSH hosts found in ~/.ssh/config.", None)
+        status = ssh_config_status()
+        return ("Tool", f"{status.message}\n\nFix: {status.fix}", None)
 
     def check(alias: str) -> tuple[str, bool, str]:
         try:

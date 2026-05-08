@@ -55,7 +55,7 @@ app_gid="$(id -g)"
 
 choose "Config storage (/config: generated config, API key file, session secret)" \
   "Bind mount ./config-data (recommended)" \
-  "Docker named volume ollama-hooks-config"
+  "Docker named volume command-deck-config"
 case "$CHOICE" in
   1)
     config_path="$(prompt_default "Config bind path" "./config-data")"
@@ -63,14 +63,14 @@ case "$CHOICE" in
     config_volume="$(yaml_quote "${config_path}:/config")"
     ;;
   2)
-    config_volume="ollama-hooks-config:/config"
+    config_volume="command-deck-config:/config"
     ;;
 esac
 
 choose "Data / agent home (/data: sessions, canvas files, users, ~/.ssh)" \
   "Bind mount current user's home (recommended for SSH and host files)" \
   "Bind mount ./data" \
-  "Docker named volume ollama-hooks-data" \
+  "Docker named volume command-deck-data" \
   "Custom bind path"
 case "$CHOICE" in
   1)
@@ -84,7 +84,7 @@ case "$CHOICE" in
     data_volume="$(yaml_quote "${data_path}:/data")"
     ;;
   3)
-    data_volume="ollama-hooks-data:/data"
+    data_volume="command-deck-data:/data"
     ;;
   4)
     data_path="$(prompt_default "Data bind path" "${HOME}")"
@@ -112,7 +112,7 @@ ensure_bind_dir "$workspace_path"
 workspace_volume="$(yaml_quote "${workspace_path}:/workspace")"
 
 choose "SSH access" \
-  "Use /data/.ssh from the data mount" \
+  "Use /data/.ssh from the data mount (best when /data is your host home)" \
   "Mount host ~/.ssh read-only, including keys" \
   "Mount only host ~/.ssh/config and known_hosts read-only" \
   "No extra SSH mount"
@@ -120,10 +120,12 @@ ssh_choice="$CHOICE"
 ssh_volumes=()
 ssh_agent_volume=""
 ssh_agent_env=""
+host_ssh_dir=""
 if [[ "$ssh_choice" == "2" ]]; then
   mkdir -p "${HOME}/.ssh"
   chmod 700 "${HOME}/.ssh" || true
   ssh_volumes+=("$(yaml_quote "${HOME}/.ssh:/data/.ssh:ro")")
+  host_ssh_dir="${HOME}/.ssh"
 elif [[ "$ssh_choice" == "3" ]]; then
   mkdir -p "${HOME}/.ssh"
   touch "${HOME}/.ssh/config" "${HOME}/.ssh/known_hosts"
@@ -131,10 +133,84 @@ elif [[ "$ssh_choice" == "3" ]]; then
   chmod 600 "${HOME}/.ssh/config" "${HOME}/.ssh/known_hosts" || true
   ssh_volumes+=("$(yaml_quote "${HOME}/.ssh/config:/data/.ssh/config:ro")")
   ssh_volumes+=("$(yaml_quote "${HOME}/.ssh/known_hosts:/data/.ssh/known_hosts:ro")")
+  host_ssh_dir="${HOME}/.ssh"
+elif [[ "$ssh_choice" == "1" && -n "${data_path:-}" ]]; then
+  host_ssh_dir="${data_path%/}/.ssh"
 fi
 if [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" && "$ssh_choice" != "4" ]]; then
   ssh_agent_volume="$(yaml_quote "${SSH_AUTH_SOCK}:/ssh-agent")"
   ssh_agent_env="/ssh-agent"
+fi
+
+if [[ "$ssh_choice" != "4" && -z "$host_ssh_dir" ]]; then
+  cat <<'EOF'
+
+Warning: /data is a Docker named volume, so option 1 does not see your host
+~/.ssh files. Use SSH option 2 or bind /data to your host home if you want
+existing SSH aliases.
+EOF
+fi
+
+if [[ -n "$host_ssh_dir" ]]; then
+  mkdir -p "$host_ssh_dir"
+  touch "$host_ssh_dir/config" "$host_ssh_dir/known_hosts"
+  chmod 700 "$host_ssh_dir" || true
+  chmod 600 "$host_ssh_dir/config" "$host_ssh_dir/known_hosts" || true
+
+  alias_count="$(awk 'BEGIN{c=0} /^[[:space:]]*[Hh][Oo][Ss][Tt][[:space:]]+/ { if ($2 !~ /[*?!]/) c++ } END{print c}' "$host_ssh_dir/config" 2>/dev/null || printf '0')"
+  echo
+  echo "SSH config the container will read:"
+  echo "  Host path:      ${host_ssh_dir}/config"
+  echo "  Container path: /data/.ssh/config"
+  echo "  Usable aliases: ${alias_count}"
+
+  add_alias_default="n"
+  if [[ "$alias_count" == "0" ]]; then
+    add_alias_default="Y"
+    echo
+    echo "No SSH aliases were found. Add one now so /hosts has something to show."
+  fi
+  if [[ "$add_alias_default" == "Y" ]]; then
+    add_alias_prompt="Y/n"
+  else
+    add_alias_prompt="y/N"
+  fi
+  read -r -p "Add an SSH host alias now? [${add_alias_prompt}]: " add_alias
+  add_alias="${add_alias:-$add_alias_default}"
+  if [[ "$add_alias" =~ ^[Yy]$ ]]; then
+    alias_name="$(prompt_default "Alias name" "server1")"
+    host_name="$(prompt_default "HostName or IP" "server1")"
+    host_user="$(prompt_default "SSH user" "${USER}")"
+    default_key=""
+    if [[ "$ssh_choice" == "3" ]]; then
+      echo "SSH option 3 mounts config and known_hosts only. Use SSH agent or switch to option 2 if the container needs key files."
+    elif [[ -f "$host_ssh_dir/id_ed25519" ]]; then
+      default_key="/data/.ssh/id_ed25519"
+    elif [[ -f "$host_ssh_dir/id_rsa" ]]; then
+      default_key="/data/.ssh/id_rsa"
+    fi
+    identity_file="$(prompt_default "IdentityFile inside container (blank for SSH default)" "$default_key")"
+
+    {
+      echo
+      echo "Host ${alias_name}"
+      echo "  HostName ${host_name}"
+      echo "  User ${host_user}"
+      if [[ -n "$identity_file" ]]; then
+        echo "  IdentityFile ${identity_file}"
+      fi
+      echo "  IdentitiesOnly yes"
+    } >> "$host_ssh_dir/config"
+    chmod 600 "$host_ssh_dir/config" || true
+
+    if command -v ssh-keyscan >/dev/null 2>&1; then
+      read -r -p "Add ${host_name} to known_hosts with ssh-keyscan? [y/N]: " scan_host
+      if [[ "$scan_host" =~ ^[Yy]$ ]]; then
+        ssh-keyscan -H "$host_name" >> "$host_ssh_dir/known_hosts" 2>/dev/null || echo "ssh-keyscan failed; SSH can still prompt/fail normally later."
+        chmod 600 "$host_ssh_dir/known_hosts" || true
+      fi
+    fi
+  fi
 fi
 
 cat > docker-compose.override.yml <<YAML
