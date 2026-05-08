@@ -148,6 +148,12 @@ tables, links) so it renders cleanly in the canvas preview.
 
 CHAT_MODES: dict[str, str] = {
     "default": "",
+    "conversation": (
+        "You are in CONVERSATION mode. Be natural, present, and easy to talk with. "
+        "Keep replies conversational and responsive rather than structured unless structure is clearly useful. "
+        "Ask at most one follow-up question when it would move the conversation forward. "
+        "Do not list capabilities for greetings or small talk."
+    ),
     "coding": (
         "You are in CODING mode. Prioritise working code over explanation. "
         "Always use fenced code blocks with language tags. Be precise and terse. "

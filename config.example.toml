@@ -85,3 +85,9 @@ ollama_api = true
 enabled = false
 config_path = "/data/.ssh/config"
 known_hosts_path = "/data/.ssh/known_hosts"
+
+[stt]
+enabled = true
+whisper_model = "medium"
+whisper_device = "cuda"
+whisper_device_index = 1

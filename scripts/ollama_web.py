@@ -2379,6 +2379,7 @@ INDEX_HTML = r"""<!doctype html>
             <option value="agent" selected>🤖 Agent</option>
           </optgroup>
           <optgroup label="── Chat Modes ──">
+            <option value="conversation">🗣 Conversation</option>
             <option value="coding">💻 Coding</option>
             <option value="creative">🎨 Creative</option>
             <option value="concise">⚡ Concise</option>
@@ -2507,7 +2508,7 @@ INDEX_HTML = r"""<!doctype html>
       </div>
       <button id="attachBtn" type="button" title="Attach image or document">📎</button>
       <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.doc,.csv,.txt,.md,.json" style="display:none">
-      <button id="micBtn" type="button" title="Hold to record voice (requires Whisper)" style="display:none">🎙</button>
+      <button id="micBtn" type="button" title="Click to start/stop voice input. Shift-click toggles auto-send.">🎙</button>
       <button id="readLastBtn" type="button" disabled title="Read last reply aloud">🔊 Read</button>
       <span id="genIndicator"><span class="spinner"></span><span id="genLabel">Thinking…</span></span>
       <button id="stopBtn" type="button" title="Stop generation">⏹ Stop</button>
@@ -2532,6 +2533,7 @@ INDEX_HTML = r"""<!doctype html>
       agentMode: true,
       verbose: true,
       chatMode: "default",
+      voiceAutoSend: false,
       personality: "default",
       agentProfile: "general",
       assistantName: "Lilith",
@@ -2572,6 +2574,7 @@ INDEX_HTML = r"""<!doctype html>
         agentMode: Boolean(state.agentMode),
         verbose: Boolean(state.verbose),
         chatMode: state.chatMode || "default",
+        voiceAutoSend: Boolean(state.voiceAutoSend),
         personality: state.personality || "default",
         agentProfile: state.agentProfile || "general",
         assistantName: cleanAssistantName(state.assistantName),
@@ -2773,16 +2776,38 @@ INDEX_HTML = r"""<!doctype html>
     // ── Mic / Whisper STT ─────────────────────────────────────────────────────
     let mediaRecorder = null;
     let audioChunks = [];
+    let sttReady = false;
+    function updateMicUi() {
+      micBtn.disabled = !sttReady;
+      micBtn.title = sttReady
+        ? (state.voiceAutoSend ? "Voice input: auto-send ON. Click to record, Shift-click disables auto-send." : "Voice input: click to record. Shift-click enables auto-send.")
+        : "Voice input unavailable. Install faster-whisper and enable [stt].";
+      micBtn.classList.toggle("active", Boolean(state.voiceAutoSend));
+    }
     async function checkSttAvailable() {
       try {
         const res = await fetch("/api/stt-status");
         const data = await res.json();
-        if (data.ok && data.enabled) micBtn.style.display = "";
-      } catch {}
+        sttReady = Boolean(data.ok && data.enabled);
+      } catch {
+        sttReady = false;
+      }
+      updateMicUi();
     }
     checkSttAvailable();
 
-    micBtn.addEventListener("click", async () => {
+    micBtn.addEventListener("click", async (event) => {
+      if (event.shiftKey) {
+        state.voiceAutoSend = !state.voiceAutoSend;
+        saveSettings();
+        updateMicUi();
+        addMessage("Tool", "Voice auto-send " + (state.voiceAutoSend ? "enabled." : "disabled."), "tool");
+        return;
+      }
+      if (!sttReady) {
+        addMessage("Error", "Voice input is unavailable. Install faster-whisper or add GPU STT dependencies, then restart.", "error");
+        return;
+      }
       if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
         return;
@@ -2809,6 +2834,9 @@ INDEX_HTML = r"""<!doctype html>
             if (data.ok && data.text) {
               input.value = (input.value ? input.value + " " : "") + data.text.trim();
               input.focus();
+              if (state.voiceAutoSend && !currentController) {
+                await sendMessage();
+              }
             } else {
               addMessage("Error", "Transcription failed: " + (data.error || "unknown"), "error");
             }
@@ -3737,7 +3765,7 @@ INDEX_HTML = r"""<!doctype html>
       document.getElementById("modelLabel").textContent = state.model || "none";
       document.getElementById("verboseLabel").textContent = state.verbose ? "ON" : "OFF";
       appRoot.classList.toggle("verbose-on", state.verbose);
-      const modeNames = {chat:"Chat", agent:"Agent", coding:"Coding", creative:"Creative", concise:"Concise", teaching:"Teaching"};
+      const modeNames = {chat:"Chat", agent:"Agent", conversation:"Conversation", coding:"Coding", creative:"Creative", concise:"Concise", teaching:"Teaching"};
       const modeKey = state.agentMode ? "agent" : (state.chatMode === "default" ? "chat" : state.chatMode);
       document.getElementById("modeLabel").textContent = modeNames[modeKey] || modeKey;
       document.getElementById("personalityLabel").textContent = state.personality;
