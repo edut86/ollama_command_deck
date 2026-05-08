@@ -384,9 +384,8 @@ Set via the Mode dropdown or `/chat_mode <mode>`:
 
 | Mode | Behaviour |
 |---|---|
-| Chat (default) | Standard conversation |
+| Chat / Voice | Natural back-and-forth for typing or speaking |
 | Agent | Routes every message through LangChain tool orchestration |
-| Conversation | Natural back-and-forth for voice or casual discussion |
 | Coding | Prioritises working code, fenced blocks, minimal idiomatic solutions |
 | Creative | Expressive, multiple angles, vivid analogies |
 | Concise | Shortest replies, bullets, no filler |
@@ -399,9 +398,10 @@ It appears in the footer at all times, but is disabled until server-side STT is
 available. Install the optional GPU dependencies from `requirements-gpu.txt`
 or otherwise provide `faster-whisper`, then configure `[stt]` if needed.
 
-Click the mic to start recording and click again to stop. Shift-click toggles
-voice auto-send, which submits the transcribed text immediately after
-transcription. Conversation mode is tuned for this kind of spoken back-and-forth.
+Click **Chat / Voice**, then click the mic to start recording and click again to
+stop. Shift-click toggles voice auto-send, which submits the transcribed text
+immediately after transcription. Clicking the mic also leaves Agent mode and uses
+the conversation prompt.
 
 ### Personalities
 
@@ -608,7 +608,7 @@ http://piper:8880
 | `/agent on\|off` | Toggle agent mode |
 | `/chat` | Switch to normal chat mode |
 | `/verbose on\|off` | Toggle verbose stats |
-| `/chat_mode <mode>` | Set mode: default, conversation, coding, creative, concise, teaching |
+| `/chat_mode <mode>` | Set mode: default, conversation, coding, creative, concise, teaching. The Chat / Voice dropdown uses conversation mode. |
 | `/chat_personality <name>` | Set personality |
 | `/remember <text>` | Save a persistent memory note |
 | `/memory` | List memory notes |

@@ -1288,7 +1288,7 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
         }
 
     if text == "/chat":
-        return {"ok": True, "mode": "chat", "role": "Tool", "text": "Chat mode enabled. Agent mode disabled."}
+        return {"ok": True, "mode": "chat", "chatMode": "conversation", "role": "Tool", "text": "Chat/voice mode enabled. Agent mode disabled."}
     if text == "/agent on":
         if not is_langchain_available():
             return {"ok": True, "mode": "chat", "role": "Tool", "text": "LangChain is not available. Install langchain and langchain-ollama in .venv first."}
@@ -2375,11 +2375,10 @@ INDEX_HTML = r"""<!doctype html>
         <select id="model"></select>
         <select id="modeSelect">
           <optgroup label="── Interaction ──">
-            <option value="chat">💬 Chat</option>
+            <option value="chat">💬 Chat / Voice</option>
             <option value="agent" selected>🤖 Agent</option>
           </optgroup>
           <optgroup label="── Chat Modes ──">
-            <option value="conversation">🗣 Conversation</option>
             <option value="coding">💻 Coding</option>
             <option value="creative">🎨 Creative</option>
             <option value="concise">⚡ Concise</option>
@@ -2633,7 +2632,7 @@ INDEX_HTML = r"""<!doctype html>
         state.chatMode = "default";
       } else {
         state.agentMode = false;
-        state.chatMode = value === "chat" ? "default" : value;
+        state.chatMode = value === "chat" ? "conversation" : value;
       }
     }
 
@@ -2646,7 +2645,7 @@ INDEX_HTML = r"""<!doctype html>
     function syncModeSelect() {
       if (state.agentMode) {
         modeSelect.value = "agent";
-      } else if (state.chatMode === "default") {
+      } else if (state.chatMode === "default" || state.chatMode === "conversation") {
         modeSelect.value = "chat";
       } else {
         modeSelect.value = state.chatMode;
@@ -2803,6 +2802,11 @@ INDEX_HTML = r"""<!doctype html>
         updateMicUi();
         addMessage("Tool", "Voice auto-send " + (state.voiceAutoSend ? "enabled." : "disabled."), "tool");
         return;
+      }
+      if (state.agentMode) {
+        state.agentMode = false;
+        state.chatMode = "conversation";
+        updateStatus();
       }
       if (!sttReady) {
         addMessage("Error", "Voice input is unavailable. Install faster-whisper or add GPU STT dependencies, then restart.", "error");
@@ -3765,8 +3769,8 @@ INDEX_HTML = r"""<!doctype html>
       document.getElementById("modelLabel").textContent = state.model || "none";
       document.getElementById("verboseLabel").textContent = state.verbose ? "ON" : "OFF";
       appRoot.classList.toggle("verbose-on", state.verbose);
-      const modeNames = {chat:"Chat", agent:"Agent", conversation:"Conversation", coding:"Coding", creative:"Creative", concise:"Concise", teaching:"Teaching"};
-      const modeKey = state.agentMode ? "agent" : (state.chatMode === "default" ? "chat" : state.chatMode);
+      const modeNames = {chat:"Chat/Voice", agent:"Agent", coding:"Coding", creative:"Creative", concise:"Concise", teaching:"Teaching"};
+      const modeKey = state.agentMode ? "agent" : (state.chatMode === "default" || state.chatMode === "conversation" ? "chat" : state.chatMode);
       document.getElementById("modeLabel").textContent = modeNames[modeKey] || modeKey;
       document.getElementById("personalityLabel").textContent = state.personality;
       document.getElementById("agentProfileLabel").textContent = state.agentProfile;
@@ -3848,6 +3852,7 @@ INDEX_HTML = r"""<!doctype html>
     function applyResponseState(data) {
       if (data.mode === "agent") { state.agentMode = true; syncModeSelect(); }
       if (data.mode === "chat") { state.agentMode = false; syncModeSelect(); }
+      if (data.chatMode) { state.chatMode = data.chatMode; syncModeSelect(); }
       if (typeof data.verbose === "boolean") state.verbose = data.verbose;
       if (data.models) {
         const current = data.model || state.model;
