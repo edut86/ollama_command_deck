@@ -17,6 +17,16 @@ Preferred deployment command on your Docker host:
 cd /path/to/ollama-command-deck && ./scripts/deploy_web.sh
 ```
 
+Docker Web UI access defaults to HTTPS:
+
+```text
+https://localhost:8765
+https://<host-or-ip>:8765
+```
+
+Accept or trust the generated self-signed certificate before testing the browser
+microphone. Plain HTTP on a LAN IP is not a browser secure context.
+
 Preferred CLI smoke test on your Docker host:
 
 ```bash

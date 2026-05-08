@@ -9,7 +9,8 @@ This add-on asks for:
 - `messagesRead`: read selected/search-result messages.
 - `accountsRead`: include folder/account metadata in results.
 - `storage`: save the local Command Deck URL, token, and optional model.
-- `http://localhost:8765/*` and `http://127.0.0.1:8765/*`: call the local Command Deck bridge.
+- `https://localhost:8765/*` and `https://127.0.0.1:8765/*`: call the local Command Deck bridge.
+- `http://localhost:8765/*` and `http://127.0.0.1:8765/*`: optional fallback for non-Docker/local development.
 
 It does not request compose, send, delete, move, or message modification permissions.
 
@@ -24,7 +25,11 @@ It does not request compose, send, delete, move, or message modification permiss
 The add-on sends only the selected/search-result message snippets to:
 
 ```text
-POST http://localhost:8765/api/thunderbird/analyze
+POST https://localhost:8765/api/thunderbird/analyze
 ```
 
 Command Deck returns an analysis using only the snippets supplied in the request.
+
+Docker deployments use a self-signed HTTPS certificate by default. Open
+`https://localhost:8765` in the browser once and accept/trust the certificate
+before using the add-on.

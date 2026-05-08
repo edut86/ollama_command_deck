@@ -11,7 +11,9 @@ Source workflow:
 - Copy the release bundle to `server-01:/path/to/ollama-command-deck`.
 - Use `./scripts/deploy_web.sh` on `server-01` instead of raw
   `docker-compose build web && docker-compose up -d web`.
-  The script now builds/starts both `piper` and `web`.
+  The script builds/starts both `piper` and `web`, includes local
+  `docker-compose.override.yml` when present, auto-detects GPU STT mode, and
+  prints the HTTPS URL.
 
 Default Docker deployment:
 
@@ -19,6 +21,8 @@ Default Docker deployment:
 - Offline TTS service: `piper`
 - Common container name: `web`
 - Web port: `8765`
+- Web scheme: HTTPS by default in Docker. The container generates a self-signed
+  certificate under `/config/tls` when `OLLAMA_WEB_AUTO_TLS=1`.
 - In-container home/data path: `/data`
 - Recommended setup UI SSH paths:
   - SSH config: `/data/.ssh/config`

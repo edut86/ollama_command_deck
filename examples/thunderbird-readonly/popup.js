@@ -8,7 +8,7 @@ function setStatus(text) {
 
 async function loadSettings() {
   const saved = await api.storage.local.get(["baseUrl", "token", "model"]);
-  document.getElementById("baseUrl").value = saved.baseUrl || "http://localhost:8765";
+  document.getElementById("baseUrl").value = saved.baseUrl || "https://localhost:8765";
   document.getElementById("token").value = saved.token || "";
   document.getElementById("model").value = saved.model || "";
 }
@@ -64,7 +64,7 @@ async function searchSnippets(query) {
 
 async function analyze(messages) {
   const saved = await api.storage.local.get(["baseUrl", "token", "model"]);
-  const baseUrl = (saved.baseUrl || "http://localhost:8765").replace(/\/$/, "");
+  const baseUrl = (saved.baseUrl || "https://localhost:8765").replace(/\/$/, "");
   const token = saved.token || "";
   if (!token) throw new Error("Paste and save the Thunderbird bridge token first.");
   const question = document.getElementById("question").value.trim();

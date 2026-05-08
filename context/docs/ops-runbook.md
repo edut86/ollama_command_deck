@@ -34,6 +34,11 @@ Use `./scripts/deploy_web.sh`; it builds and starts both `piper` and `web`, and
 removes stale service containers before bringing them up when Compose v1 is
 detected.
 
+Docker Web UI access is HTTPS by default. The web container generates a
+self-signed certificate under `/config/tls`; use `https://localhost:8765` on the
+Docker host or `https://<host-or-ip>:8765` from another device. Plain
+`http://<LAN-IP>:8765` will not expose browser microphone APIs.
+
 SSH note:
 
 When SSH works on the host but fails inside Docker, check whether the key is

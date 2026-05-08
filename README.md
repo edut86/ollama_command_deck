@@ -66,7 +66,9 @@ The most useful configuration binds the host user's home dir to `/data` and buil
     ```bash
     ./scripts/deploy_web.sh
     ```
-3. **Open `http://localhost:8765`** — the first-run setup wizard appears.
+3. **Open `https://localhost:8765`** — the first-run setup wizard appears.
+   Docker generates a self-signed certificate under `/config/tls` so browser
+   microphone access works from a secure context.
 
 Advanced manual setup:
 
@@ -89,6 +91,9 @@ Advanced manual setup:
         OLLAMA_HOOKS_CONFIG: /config/config.toml
         OLLAMA_HOOKS_DATA_DIR: /data
         OLLAMA_WEB_NO_VENV: "1"
+        OLLAMA_WEB_AUTO_TLS: "1"
+        WEB_CERT_FILE: /config/tls/command-deck.crt
+        WEB_KEY_FILE: /config/tls/command-deck.key
     ```
 
 The wizard asks for an admin username/password, Ollama API URL and optional API key/token, a working directory (e.g. `/data/git/<your-project>` to start the agent inside one of your repos), and whether to enable local command, SSH, internet search, MCP tooling, and **dangerous mode** (lifts the work-directory sandbox and the destructive-command blocklist; privilege-escalation tokens — `sudo`, `su`, `doas`, `pkexec`, `passwd`, `visudo` — stay blocked).
@@ -594,6 +599,12 @@ Run the web UI and Piper TTS server together:
 nano config.toml
 docker compose restart web
 ```
+
+Docker starts the Web UI over HTTPS by default so browser microphone capture can
+work from phones and other LAN devices. `deploy_web.sh` prints the URL and the
+certificate names/IPs it detected. Open `https://localhost:8765` on the Docker
+host, or `https://<host-or-ip>:8765` from another device, then accept/trust the
+self-signed certificate.
 
 `docker-compose.yml` maps `~/piper-voices` to `/piper-voices` in the Piper
 container and sets `KOKORO_URL=http://piper:8880` for the Web UI. In the setup
