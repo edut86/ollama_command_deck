@@ -2891,19 +2891,44 @@ INDEX_HTML = r"""<!doctype html>
     let mediaRecorder = null;
     let audioChunks = [];
     let sttReady = false;
+    let voiceConversationActive = false;
+    let voiceMonitorTimer = null;
+    let voiceAudioContext = null;
+    let voiceStream = null;
     function hasBrowserMicApi() {
       return Boolean(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+    function voiceIsRecording() {
+      return Boolean(mediaRecorder && mediaRecorder.state === "recording");
+    }
+    function stopVoiceMonitor() {
+      if (voiceMonitorTimer) {
+        clearInterval(voiceMonitorTimer);
+        voiceMonitorTimer = null;
+      }
+      if (voiceAudioContext) {
+        voiceAudioContext.close().catch(() => {});
+        voiceAudioContext = null;
+      }
+    }
+    function setVoiceConversationActive(on) {
+      voiceConversationActive = Boolean(on);
+      micBtn.classList.toggle("recording", voiceConversationActive || voiceIsRecording());
+      micBtn.textContent = voiceConversationActive
+        ? (voiceIsRecording() ? "⏹" : "🎙")
+        : (voiceIsRecording() ? "⏹" : "🎙");
+      updateMicUi();
     }
     function updateMicUi() {
       const browserMicReady = hasBrowserMicApi();
       micBtn.title = !browserMicReady
         ? "Voice input requires HTTPS or http://localhost in the browser."
         : sttReady
-        ? "Voice input: click to start/stop recording."
+        ? "Voice input: click to start/stop recording. With Auto-send enabled, click once to start/stop hands-free conversation mode."
         : "Voice input unavailable. Click for setup details.";
       voiceAutoSend.checked = Boolean(state.voiceAutoSend);
       voiceAutoWrap.classList.toggle("active", Boolean(state.voiceAutoSend));
-      micBtn.classList.toggle("active", Boolean(state.voiceAutoSend));
+      micBtn.classList.toggle("active", Boolean(state.voiceAutoSend) || voiceConversationActive);
       micBtn.classList.toggle("unavailable", !sttReady || !browserMicReady);
     }
     async function checkSttAvailable() {
@@ -2920,10 +2945,133 @@ INDEX_HTML = r"""<!doctype html>
 
     voiceAutoSend.addEventListener("change", () => {
       state.voiceAutoSend = voiceAutoSend.checked;
+      if (state.voiceAutoSend) {
+        state.agentMode = false;
+        state.chatMode = "conversation";
+      } else {
+        setVoiceConversationActive(false);
+        if (voiceIsRecording()) mediaRecorder.stop();
+      }
       saveSettings();
       updateMicUi();
-      addMessage("Tool", "Voice auto-send " + (state.voiceAutoSend ? "enabled." : "disabled."), "tool");
+      addMessage("Tool", state.voiceAutoSend ? "Voice conversation mode enabled. Click the mic once, speak, and I will auto-send each turn." : "Voice auto-send disabled.", "tool");
     });
+
+    function scheduleVoiceConversationRestart(delay = 850) {
+      if (!voiceConversationActive || !state.voiceAutoSend || currentController || voiceIsRecording()) return;
+      setTimeout(() => {
+        if (voiceConversationActive && state.voiceAutoSend && !currentController && !voiceIsRecording()) {
+          startVoiceRecording(true);
+        }
+      }, delay);
+    }
+
+    function setupVoiceAutoStop(stream, startedAt) {
+      stopVoiceMonitor();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) {
+        setTimeout(() => {
+          if (voiceIsRecording()) mediaRecorder.stop();
+        }, 6000);
+        return;
+      }
+      voiceAudioContext = new AudioCtx();
+      const source = voiceAudioContext.createMediaStreamSource(stream);
+      const analyser = voiceAudioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+      let speechStarted = false;
+      let silenceSince = null;
+      const speechThreshold = 18;
+      const silenceThreshold = 10;
+      voiceMonitorTimer = setInterval(() => {
+        if (!voiceIsRecording()) {
+          stopVoiceMonitor();
+          return;
+        }
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const value of data) {
+          const centered = value - 128;
+          sum += centered * centered;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        const elapsed = Date.now() - startedAt;
+        if (rms >= speechThreshold) {
+          speechStarted = true;
+          silenceSince = null;
+        } else if (speechStarted && rms <= silenceThreshold) {
+          if (!silenceSince) silenceSince = Date.now();
+          if (Date.now() - silenceSince > 1100 && elapsed > 1200) {
+            mediaRecorder.stop();
+          }
+        }
+        if (!speechStarted && elapsed > 9000) {
+          mediaRecorder.stop();
+        }
+      }, 120);
+    }
+
+    async function startVoiceRecording(autoStop = false) {
+      if (voiceIsRecording()) return;
+      try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({audio: true});
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(voiceStream);
+        const startedAt = Date.now();
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+        mediaRecorder.onstop = async () => {
+          stopVoiceMonitor();
+          micBtn.classList.remove("recording");
+          micBtn.textContent = voiceConversationActive ? "🎙" : "🎙";
+          voiceStream.getTracks().forEach(t => t.stop());
+          voiceStream = null;
+          const blob = new Blob(audioChunks, {type: mediaRecorder.mimeType || "audio/webm"});
+          micBtn.disabled = true;
+          micBtn.textContent = "⏳";
+          let transcribedText = "";
+          try {
+            const res = await fetch("/api/transcribe", {
+              method: "POST",
+              headers: {"Content-Type": blob.type},
+              body: blob,
+            });
+            const data = await res.json();
+            if (data.ok && data.text) {
+              transcribedText = data.text.trim();
+              input.value = (input.value ? input.value + " " : "") + transcribedText;
+              input.focus();
+              if (state.voiceAutoSend && !currentController) {
+                state.agentMode = false;
+                state.chatMode = "conversation";
+                updateStatus();
+                await sendMessage();
+              }
+            } else if (data.error) {
+              addMessage("Error", "Transcription failed: " + data.error, "error");
+            }
+          } catch (err) {
+            addMessage("Error", "Transcription error: " + err, "error");
+          } finally {
+            micBtn.disabled = false;
+            micBtn.textContent = "🎙";
+            updateMicUi();
+            if (autoStop && (!currentController || !input.value.trim())) {
+              scheduleVoiceConversationRestart(transcribedText ? 850 : 350);
+            }
+          }
+        };
+        mediaRecorder.start();
+        micBtn.classList.add("recording");
+        micBtn.textContent = "⏹";
+        updateMicUi();
+        if (autoStop) setupVoiceAutoStop(voiceStream, startedAt);
+      } catch (err) {
+        setVoiceConversationActive(false);
+        addMessage("Error", "Microphone access denied: " + err, "error");
+      }
+    }
 
     micBtn.addEventListener("click", async () => {
       if (state.agentMode) {
@@ -2940,51 +3088,26 @@ INDEX_HTML = r"""<!doctype html>
         checkSttAvailable();
         return;
       }
+      if (state.voiceAutoSend) {
+        if (voiceConversationActive) {
+          setVoiceConversationActive(false);
+          if (voiceIsRecording()) mediaRecorder.stop();
+          addMessage("Tool", "Voice conversation mode stopped.", "tool");
+        } else {
+          state.agentMode = false;
+          state.chatMode = "conversation";
+          updateStatus();
+          setVoiceConversationActive(true);
+          addMessage("Tool", "Voice conversation mode listening. Speak naturally; I will send after a short pause.", "tool");
+          await startVoiceRecording(true);
+        }
+        return;
+      }
       if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
         return;
       }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-        audioChunks = [];
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-        mediaRecorder.onstop = async () => {
-          micBtn.classList.remove("recording");
-          micBtn.textContent = "🎙";
-          stream.getTracks().forEach(t => t.stop());
-          const blob = new Blob(audioChunks, {type: mediaRecorder.mimeType || "audio/webm"});
-          micBtn.disabled = true;
-          micBtn.textContent = "⏳";
-          try {
-            const res = await fetch("/api/transcribe", {
-              method: "POST",
-              headers: {"Content-Type": blob.type},
-              body: blob,
-            });
-            const data = await res.json();
-            if (data.ok && data.text) {
-              input.value = (input.value ? input.value + " " : "") + data.text.trim();
-              input.focus();
-              if (state.voiceAutoSend && !currentController) {
-                await sendMessage();
-              }
-            } else {
-              addMessage("Error", "Transcription failed: " + (data.error || "unknown"), "error");
-            }
-          } catch (err) {
-            addMessage("Error", "Transcription error: " + err, "error");
-          } finally {
-            micBtn.textContent = "🎙";
-            updateMicUi();
-          }
-        };
-        mediaRecorder.start();
-        micBtn.classList.add("recording");
-        micBtn.textContent = "⏹";
-      } catch (err) {
-        addMessage("Error", "Microphone access denied: " + err, "error");
-      }
+      await startVoiceRecording(false);
     });
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -4445,6 +4568,7 @@ INDEX_HTML = r"""<!doctype html>
       } finally {
         currentController = null;
         setGenerating(false);
+        scheduleVoiceConversationRestart();
       }
     }
 

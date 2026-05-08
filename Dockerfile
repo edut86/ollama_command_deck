@@ -39,6 +39,7 @@ USER ollama-hooks
 ENV OLLAMA_HOOKS_CONFIG=/config/config.toml \
     OLLAMA_HOOKS_DATA_DIR=/data \
     OLLAMA_WEB_NO_VENV=1 \
+    LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib \
     HOME=/data
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

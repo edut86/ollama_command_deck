@@ -40,6 +40,7 @@ services:
       OLLAMA_WEB_TLS_HOSTS: ${OLLAMA_WEB_TLS_HOSTS:-}
       WEB_CERT_FILE: /config/tls/command-deck.crt
       WEB_KEY_FILE: /config/tls/command-deck.key
+      LD_LIBRARY_PATH: /usr/local/lib/python3.12/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib
       # Uses the bundled piper service for offline TTS when voices are present.
       KOKORO_URL: http://piper:8880
 
