@@ -666,6 +666,24 @@ Host server1
 Then use `/hosts` in the Web UI. It should list `server1`, and `/ssh
 server1 "hostname && uptime"` should run against that host.
 
+If your SSH config uses `.local` names, the setup helper resolves them on the
+host and writes Docker `extra_hosts` entries when possible. That avoids the
+common Docker issue where the host can resolve mDNS names but the container
+cannot.
+
+To uninstall the Docker deployment:
+
+```bash
+./scripts/uninstall_docker.sh
+```
+
+Add `--volumes` to also delete Docker volumes containing app config, users,
+sessions, and data:
+
+```bash
+./scripts/uninstall_docker.sh --volumes
+```
+
 ---
 
 ## Security

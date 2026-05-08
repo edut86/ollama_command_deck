@@ -18,6 +18,9 @@ echo "Using ${COMPOSE[*]} (${COMPOSE_KIND})"
 
 STT_MODE="${STT_MODE:-auto}"
 COMPOSE_FILES=(-f docker-compose.yml)
+if [[ -f docker-compose.override.yml ]]; then
+  COMPOSE_FILES+=(-f docker-compose.override.yml)
+fi
 if [[ "$STT_MODE" == "auto" ]]; then
   if command -v nvidia-smi >/dev/null 2>&1 && docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
     STT_MODE="gpu"

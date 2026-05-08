@@ -121,6 +121,7 @@ ssh_volumes=()
 ssh_agent_volume=""
 ssh_agent_env=""
 host_ssh_dir=""
+extra_hosts=()
 if [[ "$ssh_choice" == "2" ]]; then
   mkdir -p "${HOME}/.ssh"
   chmod 700 "${HOME}/.ssh" || true
@@ -211,6 +212,19 @@ if [[ -n "$host_ssh_dir" ]]; then
       fi
     fi
   fi
+
+  if command -v getent >/dev/null 2>&1; then
+    while read -r hostname; do
+      [[ -n "$hostname" ]] || continue
+      ip="$(getent hosts "$hostname" | awk '{print $1; exit}')"
+      if [[ -n "$ip" ]]; then
+        extra_hosts+=("${hostname}:${ip}")
+      fi
+    done < <(awk '
+      BEGIN { IGNORECASE=1 }
+      /^[[:space:]]*HostName[[:space:]]+/ && $2 ~ /\.local$/ { print $2 }
+    ' "$host_ssh_dir/config" 2>/dev/null | sort -u)
+  fi
 fi
 
 cat > docker-compose.override.yml <<YAML
@@ -238,6 +252,14 @@ if [[ -n "$ssh_agent_volume" ]]; then
       SSH_AUTH_SOCK: "${ssh_agent_env}"
 YAML
 fi
+if (( ${#extra_hosts[@]} > 0 )); then
+  cat >> docker-compose.override.yml <<YAML
+    extra_hosts:
+YAML
+  for host_entry in "${extra_hosts[@]}"; do
+    printf '      - %s\n' "$(yaml_quote "$host_entry")" >> docker-compose.override.yml
+  done
+fi
 
 cat <<'EOF'
 
@@ -248,6 +270,14 @@ In the web setup wizard, use these in-container paths:
   known_hosts path: /data/.ssh/known_hosts
   work directory:   /workspace
 EOF
+
+if (( ${#extra_hosts[@]} > 0 )); then
+  echo
+  echo "Added Docker extra_hosts for .local SSH names:"
+  for host_entry in "${extra_hosts[@]}"; do
+    echo "  ${host_entry}"
+  done
+fi
 
 read -r -p "Rebuild/recreate web now with ./scripts/deploy_web.sh? [Y/n]: " run_now
 run_now="${run_now:-Y}"
