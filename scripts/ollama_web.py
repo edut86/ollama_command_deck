@@ -2588,6 +2588,8 @@ INDEX_HTML = r"""<!doctype html>
         <input id="ttsVolume" type="range" min="-50" max="50" step="5" value="0" title="Voice volume">
         <span class="tts-speed-label">Text: <strong id="textZoomLabel">100%</strong></span>
         <input id="textZoom" type="range" min="85" max="140" step="5" value="100" title="Text zoom">
+        <span class="tts-speed-label">Pause: <strong id="voicePauseLabel">1.8s</strong></span>
+        <input id="voicePauseDelay" type="range" min="800" max="4000" step="100" value="1800" title="Voice conversation pause before auto-send">
         <button id="ttsStopBtn" type="button">Stop</button>
       </div>
       <div class="hint">Commands: /help /model /hosts /ssh /local /search /agent on|off /chat /verbose on|off /clear /quit</div>
@@ -2684,6 +2686,7 @@ INDEX_HTML = r"""<!doctype html>
       agentProfile: "general",
       assistantName: "Lilith",
       textZoom: 100,
+      voicePauseDelay: 1800,
       keepAlive: false,
       gpu: "0",
       ...savedSettings,
@@ -2725,6 +2728,7 @@ INDEX_HTML = r"""<!doctype html>
         agentProfile: state.agentProfile || "general",
         assistantName: cleanAssistantName(state.assistantName),
         textZoom: Number(state.textZoom) || 100,
+        voicePauseDelay: Math.max(800, Math.min(4000, Number(state.voicePauseDelay) || 1800)),
         keepAlive: Boolean(state.keepAlive),
         gpu: state.gpu || "0",
       }));
@@ -2813,6 +2817,8 @@ INDEX_HTML = r"""<!doctype html>
     const ttsVolumeLabel = document.getElementById("ttsVolumeLabel");
     const textZoom = document.getElementById("textZoom");
     const textZoomLabel = document.getElementById("textZoomLabel");
+    const voicePauseDelay = document.getElementById("voicePauseDelay");
+    const voicePauseLabel = document.getElementById("voicePauseLabel");
     const readLastBtn = document.getElementById("readLastBtn");
     const stopBtn = document.getElementById("stopBtn");
     const attachBtn = document.getElementById("attachBtn");
@@ -2876,19 +2882,32 @@ INDEX_HTML = r"""<!doctype html>
       document.documentElement.style.setProperty("--ui-font-size", (14 * zoom / 100).toFixed(1) + "px");
       saveSettings();
     }
+    function applyVoicePauseDelay(value) {
+      const delay = Math.max(800, Math.min(4000, parseInt(value || "1800", 10) || 1800));
+      state.voicePauseDelay = delay;
+      voicePauseDelay.value = String(delay);
+      voicePauseLabel.textContent = (delay / 1000).toFixed(1) + "s";
+      saveSettings();
+    }
+    function getVoicePauseDelay() {
+      return Math.max(800, Math.min(4000, parseInt(state.voicePauseDelay || voicePauseDelay.value || "1800", 10) || 1800));
+    }
     ttsRate.value = localStorage.getItem("ollamaWebTtsRate") || "0";
     ttsPitch.value = localStorage.getItem("ollamaWebTtsPitch") || "0";
     ttsTone.value = localStorage.getItem("ollamaWebTtsTone") || "natural";
     ttsVolume.value = localStorage.getItem("ollamaWebTtsVolume") || "0";
     textZoom.value = String(state.textZoom || 100);
+    voicePauseDelay.value = String(state.voicePauseDelay || 1800);
     updateRateLabel();
     updateMixerLabels();
     applyTextZoom(textZoom.value);
+    applyVoicePauseDelay(voicePauseDelay.value);
     ttsRate.addEventListener("input", () => { updateRateLabel(); localStorage.setItem("ollamaWebTtsRate", ttsRate.value); });
     ttsPitch.addEventListener("input", () => { updateMixerLabels(); localStorage.setItem("ollamaWebTtsPitch", ttsPitch.value); });
     ttsTone.addEventListener("change", () => { localStorage.setItem("ollamaWebTtsTone", ttsTone.value); });
     ttsVolume.addEventListener("input", () => { updateMixerLabels(); localStorage.setItem("ollamaWebTtsVolume", ttsVolume.value); });
     textZoom.addEventListener("input", () => applyTextZoom(textZoom.value));
+    voicePauseDelay.addEventListener("input", () => applyVoicePauseDelay(voicePauseDelay.value));
     const inputHistory = JSON.parse(localStorage.getItem("ollamaWebInputHistory") || "[]");
 
     // ── TTS (server-side edge-tts neural voices) ─────────────────────────────
@@ -2988,7 +3007,7 @@ INDEX_HTML = r"""<!doctype html>
       }
       saveSettings();
       updateMicUi();
-      addMessage("Tool", state.voiceAutoSend ? "Voice conversation mode enabled. Click the mic once, speak, and I will auto-send each turn." : "Voice auto-send disabled.", "tool");
+      addMessage("Tool", state.voiceAutoSend ? `Voice conversation mode enabled. Click the mic once, speak, and I will auto-send after about ${(getVoicePauseDelay() / 1000).toFixed(1)}s of silence.` : "Voice auto-send disabled.", "tool");
     });
 
     function scheduleVoiceConversationRestart(delay = 850) {
@@ -3019,6 +3038,7 @@ INDEX_HTML = r"""<!doctype html>
       let silenceSince = null;
       const speechThreshold = 18;
       const silenceThreshold = 10;
+      const silenceStopDelay = getVoicePauseDelay();
       voiceMonitorTimer = setInterval(() => {
         if (!voiceIsRecording()) {
           stopVoiceMonitor();
@@ -3037,7 +3057,7 @@ INDEX_HTML = r"""<!doctype html>
           silenceSince = null;
         } else if (speechStarted && rms <= silenceThreshold) {
           if (!silenceSince) silenceSince = Date.now();
-          if (Date.now() - silenceSince > 1100 && elapsed > 1200) {
+          if (Date.now() - silenceSince > silenceStopDelay && elapsed > Math.max(1200, silenceStopDelay)) {
             mediaRecorder.stop();
           }
         }
@@ -3132,7 +3152,7 @@ INDEX_HTML = r"""<!doctype html>
           state.chatMode = "conversation";
           updateStatus();
           setVoiceConversationActive(true);
-          addMessage("Tool", "Voice conversation mode listening. Speak naturally; I will send after a short pause and read replies aloud.", "tool");
+          addMessage("Tool", `Voice conversation mode listening. Speak naturally; I will send after about ${(getVoicePauseDelay() / 1000).toFixed(1)}s of silence and read replies aloud.`, "tool");
           await startVoiceRecording(true);
         }
         return;
