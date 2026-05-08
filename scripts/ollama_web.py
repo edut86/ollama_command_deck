@@ -2061,7 +2061,7 @@ INDEX_HTML = r"""<!doctype html>
     }
     footer {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto auto auto auto auto;
       gap: 8px;
       padding: 10px 12px;
       background: var(--panel);
@@ -2070,9 +2070,29 @@ INDEX_HTML = r"""<!doctype html>
     }
     #micBtn { background: none; border-color: var(--border); color: var(--muted); }
     #micBtn:hover { color: var(--accent); }
+    #micBtn.unavailable { border-color: var(--border); color: var(--muted); opacity: .72; }
+    #micBtn.active { border-color: var(--accent); color: var(--accent); }
     #micBtn.recording {
       border-color: var(--error); color: var(--error);
       animation: mic-pulse 1s ease-in-out infinite;
+    }
+    .voice-auto {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 38px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .voice-auto input { margin: 0; }
+    .voice-auto.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 9%, transparent);
     }
     @keyframes mic-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255,141,141,0.4); }
@@ -2249,7 +2269,7 @@ INDEX_HTML = r"""<!doctype html>
         font-size: 12px;
       }
       footer {
-        grid-template-columns: 1fr auto auto auto;
+        grid-template-columns: 1fr auto auto auto auto;
         gap: 6px;
         padding: 8px;
       }
@@ -2268,6 +2288,10 @@ INDEX_HTML = r"""<!doctype html>
         min-width: 44px;
         min-height: 44px;
         padding: 7px 9px;
+      }
+      .voice-auto {
+        min-height: 44px;
+        padding: 0 9px;
       }
       #readLastBtn { display: none; }
       #genIndicator {
@@ -2507,7 +2531,11 @@ INDEX_HTML = r"""<!doctype html>
       </div>
       <button id="attachBtn" type="button" title="Attach image or document">📎</button>
       <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.doc,.csv,.txt,.md,.json" style="display:none">
-      <button id="micBtn" type="button" title="Click to start/stop voice input. Shift-click toggles auto-send.">🎙</button>
+      <button id="micBtn" type="button" title="Click to start/stop voice input">🎙</button>
+      <label class="voice-auto" id="voiceAutoWrap" title="Send transcribed speech immediately after recording stops">
+        <input id="voiceAutoSend" type="checkbox">
+        <span>Auto-send</span>
+      </label>
       <button id="readLastBtn" type="button" disabled title="Read last reply aloud">🔊 Read</button>
       <span id="genIndicator"><span class="spinner"></span><span id="genLabel">Thinking…</span></span>
       <button id="stopBtn" type="button" title="Stop generation">⏹ Stop</button>
@@ -2653,6 +2681,8 @@ INDEX_HTML = r"""<!doctype html>
     }
     const gpuSelect = document.getElementById("gpuSelect");
     const micBtn = document.getElementById("micBtn");
+    const voiceAutoSend = document.getElementById("voiceAutoSend");
+    const voiceAutoWrap = document.getElementById("voiceAutoWrap");
     const voiceSelect = document.getElementById("voiceSelect");
     const ttsStopBtn = document.getElementById("ttsStopBtn");
     const ttsRate = document.getElementById("ttsRate");
@@ -2777,11 +2807,13 @@ INDEX_HTML = r"""<!doctype html>
     let audioChunks = [];
     let sttReady = false;
     function updateMicUi() {
-      micBtn.disabled = !sttReady;
       micBtn.title = sttReady
-        ? (state.voiceAutoSend ? "Voice input: auto-send ON. Click to record, Shift-click disables auto-send." : "Voice input: click to record. Shift-click enables auto-send.")
-        : "Voice input unavailable. Install faster-whisper and enable [stt].";
+        ? "Voice input: click to start/stop recording."
+        : "Voice input unavailable. Click for setup details.";
+      voiceAutoSend.checked = Boolean(state.voiceAutoSend);
+      voiceAutoWrap.classList.toggle("active", Boolean(state.voiceAutoSend));
       micBtn.classList.toggle("active", Boolean(state.voiceAutoSend));
+      micBtn.classList.toggle("unavailable", !sttReady);
     }
     async function checkSttAvailable() {
       try {
@@ -2795,21 +2827,22 @@ INDEX_HTML = r"""<!doctype html>
     }
     checkSttAvailable();
 
-    micBtn.addEventListener("click", async (event) => {
-      if (event.shiftKey) {
-        state.voiceAutoSend = !state.voiceAutoSend;
-        saveSettings();
-        updateMicUi();
-        addMessage("Tool", "Voice auto-send " + (state.voiceAutoSend ? "enabled." : "disabled."), "tool");
-        return;
-      }
+    voiceAutoSend.addEventListener("change", () => {
+      state.voiceAutoSend = voiceAutoSend.checked;
+      saveSettings();
+      updateMicUi();
+      addMessage("Tool", "Voice auto-send " + (state.voiceAutoSend ? "enabled." : "disabled."), "tool");
+    });
+
+    micBtn.addEventListener("click", async () => {
       if (state.agentMode) {
         state.agentMode = false;
         state.chatMode = "conversation";
         updateStatus();
       }
       if (!sttReady) {
-        addMessage("Error", "Voice input is unavailable. Install faster-whisper or add GPU STT dependencies, then restart.", "error");
+        addMessage("Error", "Voice input is unavailable. Install faster-whisper or the GPU STT dependencies from requirements-gpu.txt, make sure [stt] enabled = true, then restart.", "error");
+        checkSttAvailable();
         return;
       }
       if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -2847,8 +2880,8 @@ INDEX_HTML = r"""<!doctype html>
           } catch (err) {
             addMessage("Error", "Transcription error: " + err, "error");
           } finally {
-            micBtn.disabled = false;
             micBtn.textContent = "🎙";
+            updateMicUi();
           }
         };
         mediaRecorder.start();

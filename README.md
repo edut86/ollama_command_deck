@@ -399,9 +399,10 @@ available. Install the optional GPU dependencies from `requirements-gpu.txt`
 or otherwise provide `faster-whisper`, then configure `[stt]` if needed.
 
 Click **Chat / Voice**, then click the mic to start recording and click again to
-stop. Shift-click toggles voice auto-send, which submits the transcribed text
+stop. Use the **Auto-send** checkbox next to the mic to submit transcribed text
 immediately after transcription. Clicking the mic also leaves Agent mode and uses
-the conversation prompt.
+the conversation prompt. If STT is unavailable, clicking the mic shows the setup
+error in chat instead of silently doing nothing.
 
 ### Personalities
 
