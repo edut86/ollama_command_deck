@@ -13,9 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt requirements.docker.txt ./
-RUN pip install --no-cache-dir -r requirements.docker.txt
+# Install Python dependencies. STT_MODE=gpu adds CUDA runtime wheels used by
+# faster-whisper/CTranslate2; STT_MODE=cpu keeps the image lighter.
+ARG STT_MODE=cpu
+COPY requirements.txt requirements.docker.txt requirements-gpu.txt ./
+RUN pip install --no-cache-dir -r requirements.docker.txt \
+    && if [ "$STT_MODE" = "gpu" ]; then pip install --no-cache-dir -r requirements-gpu.txt; fi
 
 ARG APP_UID=10001
 ARG APP_GID=10001

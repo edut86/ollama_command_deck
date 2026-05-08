@@ -406,6 +406,11 @@ immediately after transcription. Clicking the mic also leaves Agent mode and use
 the conversation prompt. If STT is unavailable, clicking the mic shows the setup
 error in chat instead of silently doing nothing.
 
+Browsers only expose microphone capture in a secure context. Use
+`http://localhost:8765` on the same machine, or configure HTTPS with `[web]
+cert_file` and `key_file` when connecting from another device or LAN hostname.
+Plain `http://<LAN-IP>:8765` will not provide `navigator.mediaDevices`.
+
 ### Personalities
 
 Set via the Personality dropdown or `/chat_personality <name>`:
@@ -599,6 +604,11 @@ configured Whisper model (`medium` by default) under `/data` because the
 container home is `/data`; the named data volume keeps it between restarts.
 Default STT device is `auto`, which falls back to CPU when CUDA is not
 available.
+
+`./scripts/deploy_web.sh` auto-detects an NVIDIA GPU plus Docker's `nvidia`
+runtime. When both exist, it builds the web image with GPU STT dependencies and
+starts `web` with `docker-compose.gpu.yml`; otherwise it builds CPU STT. Override
+with `STT_MODE=cpu ./scripts/deploy_web.sh` or `STT_MODE=gpu ./scripts/deploy_web.sh`.
 
 ---
 

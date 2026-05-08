@@ -15,6 +15,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        STT_MODE: ${STT_MODE:-cpu}
     restart: unless-stopped
     ports:
       - "8765:8765"

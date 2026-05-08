@@ -2806,14 +2806,20 @@ INDEX_HTML = r"""<!doctype html>
     let mediaRecorder = null;
     let audioChunks = [];
     let sttReady = false;
+    function hasBrowserMicApi() {
+      return Boolean(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
     function updateMicUi() {
-      micBtn.title = sttReady
+      const browserMicReady = hasBrowserMicApi();
+      micBtn.title = !browserMicReady
+        ? "Voice input requires HTTPS or http://localhost in the browser."
+        : sttReady
         ? "Voice input: click to start/stop recording."
         : "Voice input unavailable. Click for setup details.";
       voiceAutoSend.checked = Boolean(state.voiceAutoSend);
       voiceAutoWrap.classList.toggle("active", Boolean(state.voiceAutoSend));
       micBtn.classList.toggle("active", Boolean(state.voiceAutoSend));
-      micBtn.classList.toggle("unavailable", !sttReady);
+      micBtn.classList.toggle("unavailable", !sttReady || !browserMicReady);
     }
     async function checkSttAvailable() {
       try {
@@ -2839,6 +2845,10 @@ INDEX_HTML = r"""<!doctype html>
         state.agentMode = false;
         state.chatMode = "conversation";
         updateStatus();
+      }
+      if (!hasBrowserMicApi()) {
+        addMessage("Error", "Browser microphone access requires a secure context. Open Command Deck at https://... or use http://localhost:8765 on the same machine. Plain http://LAN-IP:8765 will not expose navigator.mediaDevices.", "error");
+        return;
       }
       if (!sttReady) {
         addMessage("Error", "Voice input is unavailable. Install faster-whisper or the GPU STT dependencies from requirements-gpu.txt, make sure [stt] enabled = true, then restart.", "error");
