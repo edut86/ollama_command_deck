@@ -658,7 +658,7 @@ append a block like this:
 ```sshconfig
 Host server1
   HostName 192.0.2.10
-  User edut
+  User admin
   IdentityFile /data/.ssh/id_ed25519
   IdentitiesOnly yes
 ```

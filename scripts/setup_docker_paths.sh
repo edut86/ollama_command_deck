@@ -180,7 +180,7 @@ if [[ -n "$host_ssh_dir" ]]; then
   add_alias="${add_alias:-$add_alias_default}"
   if [[ "$add_alias" =~ ^[Yy]$ ]]; then
     alias_name="$(prompt_default "Alias name" "server1")"
-    host_name="$(prompt_default "HostName or IP" "server1")"
+    host_name="$(prompt_default "HostName or IP" "server1.local")"
     host_user="$(prompt_default "SSH user" "${USER}")"
     default_key=""
     if [[ "$ssh_choice" == "3" ]]; then
