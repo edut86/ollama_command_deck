@@ -688,11 +688,35 @@ def run_tool_command(user_text: str) -> tuple[str, str, str | None] | None:
         except Exception as exc:
             return ("Tool", f"error: {exc}", f"search: {query}")
 
+    natural_search = natural_search_query(user_text)
+    if natural_search:
+        try:
+            results = search_web(natural_search)
+            if not results:
+                return ("Tool", "No results.", f"search: {natural_search}")
+            return ("Tool", json.dumps([item.__dict__ for item in results], indent=2), f"search: {natural_search}")
+        except Exception as exc:
+            return ("Tool", f"error: {exc}", f"search: {natural_search}")
+
     local_result = run_natural_local_op(user_text)
     if local_result:
         return local_result
 
     return run_natural_ssh_check(user_text)
+
+
+def natural_search_query(user_text: str) -> str | None:
+    lowered = user_text.lower().strip()
+    if user_text.startswith("/"):
+        return None
+    web_terms = (
+        "weather", "forecast", "temperature", "radar",
+        "search", "look up", "lookup", "google",
+        "latest", "current", "today", "news",
+    )
+    if not any(term in lowered for term in web_terms):
+        return None
+    return user_text.strip()
 
 
 def run_natural_local_op(user_text: str) -> tuple[str, str, str | None] | None:
