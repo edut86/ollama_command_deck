@@ -83,6 +83,21 @@ echo
 echo "Open Command Deck at ${scheme}://localhost:${published_port}"
 if [[ "$scheme" == "https" ]]; then
   echo "For microphone access from another device, use https://<this-host-or-ip>:${published_port} and accept/trust the self-signed certificate."
+  lan_urls=()
+  if command -v hostname >/dev/null 2>&1; then
+    while read -r ip; do
+      [[ -n "$ip" ]] && lan_urls+=("${scheme}://${ip}:${published_port}")
+    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v -E '^(127|172)\.' || true)
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    while read -r ipaddr; do
+      [[ -n "$ipaddr" ]] && lan_urls+=("${scheme}://${ipaddr}:${published_port}")
+    done < <(ip -o -4 addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]}' | grep -v -E '^(127|172)\.' || true)
+  fi
+  if (( ${#lan_urls[@]} > 0 )); then
+    echo "Detected LAN URL(s):"
+    printf '%s\n' "${lan_urls[@]}" | awk 'NF && !seen[$0]++ {print "  " $0}'
+  fi
   echo "Certificate names/IPs: ${OLLAMA_WEB_TLS_HOSTS:-localhost}"
   if [[ "${COMMAND_DECK_WEB_PORT_BIND:-${port_bind}}" == 127.0.0.1:* ]]; then
     echo "LAN access is disabled because COMMAND_DECK_WEB_PORT_BIND is bound to 127.0.0.1."
