@@ -47,11 +47,42 @@ ensure_bind_dir() {
   mkdir -p "$path"
 }
 
+write_env_setting() {
+  local key="$1"
+  local value="$2"
+  local tmp
+  tmp="$(mktemp)"
+  if [[ -f .env ]]; then
+    grep -v -E "^${key}=" .env > "$tmp" || true
+  fi
+  printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  mv "$tmp" .env
+}
+
 echo "Ollama Command Deck Docker path setup"
 echo "This writes docker-compose.override.yml and can recreate the web container."
 
 app_uid="$(id -u)"
 app_gid="$(id -g)"
+
+choose "Web access" \
+  "LAN access with HTTPS (recommended for phones/tablets and microphone)" \
+  "Localhost only (same machine only)" \
+  "Custom Docker port bind"
+case "$CHOICE" in
+  1)
+    web_port="$(prompt_default "Web port" "8765")"
+    web_port_bind="0.0.0.0:${web_port}:8765"
+    ;;
+  2)
+    web_port="$(prompt_default "Web port" "8765")"
+    web_port_bind="127.0.0.1:${web_port}:8765"
+    ;;
+  3)
+    web_port_bind="$(prompt_default "Docker port bind" "0.0.0.0:8765:8765")"
+    ;;
+esac
+write_env_setting "COMMAND_DECK_WEB_PORT_BIND" "$web_port_bind"
 
 choose "Config storage (/config: generated config, API key file, session secret)" \
   "Bind mount ./config-data (recommended)" \
@@ -261,9 +292,11 @@ YAML
   done
 fi
 
-cat <<'EOF'
+cat <<EOF
 
 Wrote docker-compose.override.yml
+Wrote .env with Docker web port bind:
+  COMMAND_DECK_WEB_PORT_BIND=${web_port_bind}
 
 In the web setup wizard, use these in-container paths:
   SSH config path:  /data/.ssh/config

@@ -69,9 +69,23 @@ scheme="http"
 if "${COMPOSE[@]}" "${COMPOSE_FILES[@]}" config 2>/dev/null | grep -q "WEB_CERT_FILE:"; then
   scheme="https"
 fi
+published_port="8765"
+port_bind="${COMMAND_DECK_WEB_PORT_BIND:-}"
+if [[ -z "$port_bind" && -f .env ]]; then
+  port_bind="$(awk -F= '$1 == "COMMAND_DECK_WEB_PORT_BIND" {print $2; exit}' .env 2>/dev/null || true)"
+fi
+if [[ "$port_bind" =~ :([0-9]+):8765$ ]]; then
+  published_port="${BASH_REMATCH[1]}"
+elif [[ "$port_bind" =~ ^([0-9]+):8765$ ]]; then
+  published_port="${BASH_REMATCH[1]}"
+fi
 echo
-echo "Open Command Deck at ${scheme}://localhost:8765"
+echo "Open Command Deck at ${scheme}://localhost:${published_port}"
 if [[ "$scheme" == "https" ]]; then
-  echo "For microphone access from another device, use https://<this-host-or-ip>:8765 and accept/trust the self-signed certificate."
+  echo "For microphone access from another device, use https://<this-host-or-ip>:${published_port} and accept/trust the self-signed certificate."
   echo "Certificate names/IPs: ${OLLAMA_WEB_TLS_HOSTS:-localhost}"
+  if [[ "${COMMAND_DECK_WEB_PORT_BIND:-${port_bind}}" == 127.0.0.1:* ]]; then
+    echo "LAN access is disabled because COMMAND_DECK_WEB_PORT_BIND is bound to 127.0.0.1."
+    echo "Run ./scripts/setup_docker_paths.sh and choose LAN access to expose it on your network."
+  fi
 fi

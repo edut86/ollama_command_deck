@@ -19,9 +19,10 @@ cd ollama_command_deck
 ./scripts/setup_docker_paths.sh
 ```
 
-The setup script writes a local `docker-compose.override.yml`, lets you choose
-where `/config`, `/data`, `/workspace`, and SSH files come from, then offers to
-build and start the Docker services.
+The setup script writes local ignored Docker settings. It lets you choose
+whether the Web UI is reachable from the LAN or only from localhost, where
+`/config`, `/data`, `/workspace`, and SSH files come from, then offers to build
+and start the Docker services.
 
 If you skip the script's deploy prompt, start it manually:
 
@@ -29,7 +30,8 @@ If you skip the script's deploy prompt, start it manually:
 ./scripts/deploy_web.sh
 ```
 
-Open `https://localhost:8765`; the first-run setup wizard appears. Docker
+Open `https://localhost:8765`; the first-run setup wizard appears. If you chose
+LAN access, open `https://<host-or-ip>:8765` from another device. Docker
 generates a local self-signed certificate on first start, so your browser may
 ask you to accept/trust it.
 
@@ -60,13 +62,15 @@ The most useful configuration binds the host user's home dir to `/data` and buil
     ```bash
     ./scripts/setup_docker_paths.sh
     ```
-    This writes `docker-compose.override.yml`, lets you choose `/config`, `/data`,
-    `/workspace`, and SSH mount behavior, then offers to rebuild/recreate `web`.
+    This writes `.env` and `docker-compose.override.yml`, lets you choose LAN
+    reachability, `/config`, `/data`, `/workspace`, and SSH mount behavior, then
+    offers to rebuild/recreate `web`.
 2. **Build and start manually if you skipped the script's deploy prompt:**
     ```bash
     ./scripts/deploy_web.sh
     ```
 3. **Open `https://localhost:8765`** — the first-run setup wizard appears.
+   If you chose LAN access, use `https://<host-or-ip>:8765` from another device.
    Docker generates a self-signed certificate under `/config/tls` so browser
    microphone access works from a secure context.
 
@@ -83,7 +87,7 @@ Advanced manual setup:
           APP_GID: "1000"        # output of `id -g` on the host
       restart: unless-stopped
       ports:
-        - "8765:8765"
+        - "${COMMAND_DECK_WEB_PORT_BIND:-0.0.0.0:8765:8765}"
       volumes:
         - ./config-data:/config  # host-owned bind, no sudo needed
         - /home/<you>:/data      # agent's HOME is the host user's home
@@ -117,7 +121,7 @@ The main UI shows a status banner with the current Ollama URL, enabled tools, an
 `docker-compose.yml` controls what host paths back the container's `/config` and `/data`. Editing the compose file does **not** require an image rebuild — `docker-compose up -d` is enough; Docker recreates the affected container with the new mounts.
 
 Prefer `./scripts/setup_docker_paths.sh` for this. It writes a local
-`docker-compose.override.yml` instead of editing the base compose file, and it
+`.env` and `docker-compose.override.yml` instead of editing the base compose file, and it
 uses `./scripts/deploy_web.sh` so Docker Compose v1 does not hit the
 `ContainerConfig` recreate bug.
 
@@ -612,6 +616,17 @@ work from phones and other LAN devices. `deploy_web.sh` prints the URL and the
 certificate names/IPs it detected. Open `https://localhost:8765` on the Docker
 host, or `https://<host-or-ip>:8765` from another device, then accept/trust the
 self-signed certificate.
+
+`./scripts/setup_docker_paths.sh` asks how the Web UI should bind:
+
+| Choice | Docker bind | Result |
+|---|---|---|
+| LAN access | `0.0.0.0:8765:8765` | Reachable from other LAN devices |
+| Localhost only | `127.0.0.1:8765:8765` | Only reachable on the Docker host |
+| Custom | user supplied | Use a different host/IP/port |
+
+The choice is written to the ignored `.env` file as
+`COMMAND_DECK_WEB_PORT_BIND`. Re-run the setup script to change it.
 
 `docker-compose.yml` maps `~/piper-voices` to `/piper-voices` in the Piper
 container and sets `KOKORO_URL=http://piper:8880` for the Web UI. In the setup

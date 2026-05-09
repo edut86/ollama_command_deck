@@ -19,7 +19,7 @@ services:
         STT_MODE: ${STT_MODE:-cpu}
     restart: unless-stopped
     ports:
-      - "8765:8765"
+      - "${COMMAND_DECK_WEB_PORT_BIND:-0.0.0.0:8765:8765}"
     volumes:
       # Generated first-run config and secrets.
       - command-deck-config:/config
