@@ -403,6 +403,7 @@ Set via the Mode dropdown or `/chat_mode <mode>`:
 | Mode | Behaviour |
 |---|---|
 | Chat / Voice | Natural back-and-forth for typing or speaking |
+| Live Chat | Low-latency spoken conversation; disables thinking mode on thinking-capable models and still uses fast search/device-status routing |
 | Agent | Routes every message through LangChain tool orchestration |
 | Coding | Prioritises working code, fenced blocks, minimal idiomatic solutions |
 | Creative | Expressive, multiple angles, vivid analogies |
@@ -418,11 +419,14 @@ by default after the Whisper model downloads into the container's `/data` home.
 For CUDA acceleration, set `[stt] whisper_device = "cuda"` and run the container
 with NVIDIA GPU access.
 
-Click **Chat / Voice**, then click the mic to start recording and click again to
+Click **Live Chat**, then click the mic to start recording and click again to
 stop. Use the **Auto-send** checkbox next to the mic to submit transcribed text
 immediately after transcription. Clicking the mic also leaves Agent mode and uses
-the conversation prompt. If STT is unavailable, clicking the mic shows the setup
-error in chat instead of silently doing nothing.
+Live Chat so spoken turns start faster. Live Chat can still use the fast
+deterministic tool router for requests such as weather/search and SSH/device
+status, but it does not route every message through the full agent loop. If STT
+is unavailable, clicking the mic shows the setup error in chat instead of
+silently doing nothing.
 
 Browsers only expose microphone capture in a secure context. Docker deployments
 enable HTTPS automatically by setting `WEB_CERT_FILE` and `WEB_KEY_FILE` and
@@ -662,9 +666,9 @@ with `STT_MODE=cpu ./scripts/deploy_web.sh` or `STT_MODE=gpu ./scripts/deploy_we
 | `/search <query>` | Web search |
 | `/write <path>` | Write a file |
 | `/agent on\|off` | Toggle agent mode |
-| `/chat` | Switch to normal chat mode |
+| `/chat` | Switch to low-latency Live Chat mode |
 | `/verbose on\|off` | Toggle verbose stats |
-| `/chat_mode <mode>` | Set mode: default, conversation, coding, creative, concise, teaching. The Chat / Voice dropdown uses conversation mode. |
+| `/chat_mode <mode>` | Set mode: default, conversation, live, coding, creative, concise, teaching. The Live Chat dropdown uses live mode. |
 | `/chat_personality <name>` | Set personality |
 | `/remember <text>` | Save a persistent memory note |
 | `/memory` | List memory notes |

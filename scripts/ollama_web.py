@@ -1344,11 +1344,20 @@ def stream_chat_events(payload: dict[str, Any]):
         stats: ChatStats | None = None
         answer_text_parts: list[str] = []
         # Always collect stats (cheap) so the client can update its context-window bar.
-        for chunk in stream_chat(model, stream_messages, collect_stats=True, images=images or None, base_url=ollama_base_url, keep_alive=keep_alive):
+        low_latency_chat = not agent_mode and str(payload.get("chatMode") or "") == "live"
+        for chunk in stream_chat(
+            model,
+            stream_messages,
+            collect_stats=True,
+            images=images or None,
+            base_url=ollama_base_url,
+            keep_alive=keep_alive,
+            think=False if low_latency_chat else None,
+        ):
             if isinstance(chunk, ChatStats):
                 stats = chunk
             elif isinstance(chunk, ThinkingChunk):
-                if verbose:
+                if verbose and not low_latency_chat:
                     yield {"type": "thinking", "text": chunk.text}
             else:
                 chunk_text = str(chunk)
@@ -1416,7 +1425,7 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
         }
 
     if text == "/chat":
-        return {"ok": True, "mode": "chat", "chatMode": "conversation", "role": "Tool", "text": "Chat/voice mode enabled. Agent mode disabled."}
+        return {"ok": True, "mode": "chat", "chatMode": "live", "role": "Tool", "text": "Live chat mode enabled. Agent mode disabled."}
     if text == "/agent on":
         if not is_langchain_available():
             return {"ok": True, "mode": "chat", "role": "Tool", "text": "LangChain is not available. Install langchain and langchain-ollama in .venv first."}
@@ -2528,6 +2537,7 @@ INDEX_HTML = r"""<!doctype html>
         <select id="modeSelect">
           <optgroup label="── Interaction ──">
             <option value="chat">💬 Chat / Voice</option>
+            <option value="live">🎙 Live Chat</option>
             <option value="agent" selected>🤖 Agent</option>
           </optgroup>
           <optgroup label="── Chat Modes ──">
@@ -2808,6 +2818,8 @@ INDEX_HTML = r"""<!doctype html>
         modeSelect.value = "agent";
       } else if (state.chatMode === "default" || state.chatMode === "conversation") {
         modeSelect.value = "chat";
+      } else if (state.chatMode === "live") {
+        modeSelect.value = "live";
       } else {
         modeSelect.value = state.chatMode;
       }
@@ -3015,7 +3027,7 @@ INDEX_HTML = r"""<!doctype html>
       state.voiceAutoSend = voiceAutoSend.checked;
       if (state.voiceAutoSend) {
         state.agentMode = false;
-        state.chatMode = "conversation";
+        state.chatMode = "live";
       } else {
         setVoiceConversationActive(false);
         cancelTtsQueue();
@@ -3114,7 +3126,7 @@ INDEX_HTML = r"""<!doctype html>
               input.focus();
               if (state.voiceAutoSend && !currentController) {
                 state.agentMode = false;
-                state.chatMode = "conversation";
+                state.chatMode = "live";
                 updateStatus();
                 await sendMessage();
               }
@@ -3146,7 +3158,7 @@ INDEX_HTML = r"""<!doctype html>
     micBtn.addEventListener("click", async () => {
       if (state.agentMode) {
         state.agentMode = false;
-        state.chatMode = "conversation";
+        state.chatMode = "live";
         updateStatus();
       }
       if (!hasBrowserMicApi()) {
@@ -3166,7 +3178,7 @@ INDEX_HTML = r"""<!doctype html>
           addMessage("Tool", "Voice conversation mode stopped.", "tool");
         } else {
           state.agentMode = false;
-          state.chatMode = "conversation";
+          state.chatMode = "live";
           updateStatus();
           setVoiceConversationActive(true);
           addMessage("Tool", `Voice conversation mode listening. Speak naturally; I will send after about ${(getVoicePauseDelay() / 1000).toFixed(1)}s of silence and read replies aloud.`, "tool");
@@ -4209,7 +4221,7 @@ INDEX_HTML = r"""<!doctype html>
       document.getElementById("modelLabel").textContent = state.model || "none";
       document.getElementById("verboseLabel").textContent = state.verbose ? "ON" : "OFF";
       appRoot.classList.toggle("verbose-on", state.verbose);
-      const modeNames = {chat:"Chat/Voice", agent:"Agent", coding:"Coding", creative:"Creative", concise:"Concise", teaching:"Teaching"};
+      const modeNames = {chat:"Chat/Voice", live:"Live Chat", agent:"Agent", coding:"Coding", creative:"Creative", concise:"Concise", teaching:"Teaching"};
       const modeKey = state.agentMode ? "agent" : (state.chatMode === "default" || state.chatMode === "conversation" ? "chat" : state.chatMode);
       document.getElementById("modeLabel").textContent = modeNames[modeKey] || modeKey;
       document.getElementById("personalityLabel").textContent = state.personality;

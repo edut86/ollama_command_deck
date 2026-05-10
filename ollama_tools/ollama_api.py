@@ -84,6 +84,7 @@ def stream_chat(
     images: list[str] | None = None,
     base_url: str | None = None,
     keep_alive: str | None = None,
+    think: bool | None = None,
 ) -> Iterator[str | ThinkingChunk | ChatStats]:
     """Stream chat tokens.  `images` is a list of base64-encoded image strings
     to attach to the last user message (requires a vision model). Thinking-capable
@@ -99,7 +100,9 @@ def stream_chat(
     payload: dict = {"model": model, "messages": msg_list, "stream": True}
     if keep_alive:
         payload["keep_alive"] = keep_alive
-    if _should_think(model):
+    if think is not None:
+        payload["options"] = {"think": bool(think)}
+    elif _should_think(model):
         payload["options"] = {"think": True}
     headers = {"Content-Type": "application/json"}
     api_key = get_ollama_api_key()

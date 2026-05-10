@@ -154,6 +154,12 @@ CHAT_MODES: dict[str, str] = {
         "Ask at most one follow-up question when it would move the conversation forward. "
         "Do not list capabilities for greetings or small talk."
     ),
+    "live": (
+        "You are in LIVE CONVERSATION mode. Prioritize low-latency spoken conversation. "
+        "Answer in 1-4 short natural sentences unless the user asks for detail. "
+        "Do not narrate internal reasoning. Do not list capabilities for greetings or small talk. "
+        "When tool results are provided, summarize only the useful answer and keep it conversational."
+    ),
     "coding": (
         "You are in CODING mode. Prioritise working code over explanation. "
         "Always use fenced code blocks with language tags. Be precise and terse. "
