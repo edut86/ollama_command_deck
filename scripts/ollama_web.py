@@ -2923,6 +2923,10 @@ INDEX_HTML = r"""<!doctype html>
     // ── TTS (server-side edge-tts neural voices) ─────────────────────────────
     let activeTtsBtn = null;
     let activeAudio = null;
+    let activeAudioDone = null;
+    let ttsQueue = Promise.resolve();
+    let ttsQueueActive = false;
+    let ttsQueueSerial = 0;
     let lastAnswerText = "";
 
     // ── GPU selector ─────────────────────────────────────────────────────────
@@ -3021,9 +3025,9 @@ INDEX_HTML = r"""<!doctype html>
     });
 
     function scheduleVoiceConversationRestart(delay = 850) {
-      if (!voiceConversationActive || !state.voiceAutoSend || currentController || voiceIsRecording() || activeAudio) return;
+      if (!voiceConversationActive || !state.voiceAutoSend || currentController || voiceIsRecording() || activeAudio || ttsQueueActive) return;
       setTimeout(() => {
-        if (voiceConversationActive && state.voiceAutoSend && !currentController && !voiceIsRecording() && !activeAudio) {
+        if (voiceConversationActive && state.voiceAutoSend && !currentController && !voiceIsRecording() && !activeAudio && !ttsQueueActive) {
           startVoiceRecording(true);
         }
       }, delay);
@@ -3226,6 +3230,7 @@ INDEX_HTML = r"""<!doctype html>
 
     function stopTts() {
       if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+      if (activeAudioDone) { activeAudioDone(); activeAudioDone = null; }
       if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
       activeTtsBtn = null;
     }
@@ -4062,9 +4067,9 @@ INDEX_HTML = r"""<!doctype html>
       return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]+/g, " ").trim();
     }
 
-    async function speakText(text, btn) {
-      stopTts();
-      text = cleanTextForTts(text);
+    async function speakText(text, btn, options = {}) {
+      if (options.stopExisting !== false) stopTts();
+      text = options.alreadyClean ? String(text || "").trim() : cleanTextForTts(text);
       if (!text) return;
       const voice = voiceSelect.value || "preset:lilith_dark";
       const rate = parseInt(ttsRate.value, 10);
@@ -4093,28 +4098,84 @@ INDEX_HTML = r"""<!doctype html>
         const audio = new Audio(url);
         activeAudio = audio;
         await new Promise((resolve, reject) => {
-          audio.onended = () => {
+          let settled = false;
+          const cleanup = () => {
+            if (settled) return;
+            settled = true;
             URL.revokeObjectURL(url);
             if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
             activeTtsBtn = null;
             activeAudio = null;
+            activeAudioDone = null;
+          };
+          activeAudioDone = () => {
+            cleanup();
+            resolve();
+          };
+          audio.onended = () => {
+            cleanup();
             resolve();
           };
           audio.onerror = () => {
-            URL.revokeObjectURL(url);
-            if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
-            activeTtsBtn = null;
-            activeAudio = null;
+            cleanup();
             reject(new Error("audio playback failed"));
           };
-          audio.play().catch(reject);
+          audio.play().catch(err => {
+            cleanup();
+            reject(err);
+          });
         });
       } catch (err) {
         if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
         activeAudio = null;
+        activeAudioDone = null;
         activeTtsBtn = null;
         addMessage("Error", "TTS failed: " + err, "error");
       }
+    }
+
+    function queueSpeakText(text) {
+      const cleaned = cleanTextForTts(text);
+      if (!cleaned) return ttsQueue;
+      ttsQueueActive = true;
+      const serial = ++ttsQueueSerial;
+      const next = ttsQueue
+        .catch(() => {})
+        .then(() => {
+          if (!voiceConversationActive || !state.voiceAutoSend) return;
+          return speakText(cleaned, null, {stopExisting: false, alreadyClean: true});
+        })
+        .catch(err => addMessage("Error", "TTS failed: " + err, "error"));
+      ttsQueue = next.finally(() => { if (ttsQueueSerial === serial) ttsQueueActive = false; });
+      return ttsQueue;
+    }
+
+    function takeSpeakableSegments(buffer, force = false) {
+      const cleaned = cleanTextForTts(buffer);
+      if (!cleaned) return {segments: [], rest: ""};
+      if (force) return {segments: [cleaned], rest: ""};
+      const segments = [];
+      let rest = cleaned;
+      const sentenceEnd = /[.!?](?:["')\]]+)?\s+/g;
+      let match;
+      let cut = 0;
+      while ((match = sentenceEnd.exec(cleaned)) !== null) {
+        const end = match.index + match[0].length;
+        const segment = cleaned.slice(cut, end).trim();
+        if (segment.length >= 24) {
+          segments.push(segment);
+          cut = end;
+        }
+      }
+      if (cut > 0) rest = cleaned.slice(cut).trim();
+      if (!segments.length && cleaned.length >= 240) {
+        const comma = cleaned.lastIndexOf(",", 220);
+        const space = cleaned.lastIndexOf(" ", 220);
+        const splitAt = comma > 120 ? comma + 1 : (space > 120 ? space : 220);
+        segments.push(cleaned.slice(0, splitAt).trim());
+        rest = cleaned.slice(splitAt).trim();
+      }
+      return {segments, rest};
     }
 
     ttsStopBtn.addEventListener("click", stopTts);
@@ -4551,6 +4612,22 @@ INDEX_HTML = r"""<!doctype html>
         let thinkingText = "";
         let forceCanvas = false;
         let sawFirstChunk = false;
+        const streamTtsEnabled = voiceConversationActive && state.voiceAutoSend;
+        let streamTtsBuffer = "";
+        let streamTtsStarted = false;
+        const queueStreamingSpeech = (textPart, force = false) => {
+          if (!streamTtsEnabled || (!textPart && !force)) return;
+          streamTtsBuffer += textPart;
+          const result = takeSpeakableSegments(streamTtsBuffer, force);
+          streamTtsBuffer = result.rest;
+          for (const segment of result.segments) {
+            if (!streamTtsStarted) {
+              step("Reading assistant response aloud as it streams");
+              streamTtsStarted = true;
+            }
+            queueSpeakText(segment);
+          }
+        };
         const ensureThinkingBlock = () => {
           if (thinkingBlock) return thinkingBlock;
           if (!answerBody) answerBody = createMessage(cleanAssistantName(state.assistantName), "ollama");
@@ -4594,6 +4671,7 @@ INDEX_HTML = r"""<!doctype html>
               sawFirstChunk = true;
             }
             answerText += event.text || "";
+            queueStreamingSpeech(event.text || "");
             // Re-render the answer text (without disturbing thinking block)
             let answerHolder = answerBody.querySelector(".answer-text");
             if (!answerHolder) {
@@ -4622,6 +4700,7 @@ INDEX_HTML = r"""<!doctype html>
             if (event.tool?.text) addMessage(event.tool.role || "Tool", event.tool.text, "tool");
             if (event.text) {
               answerText = event.text;
+              if (!sawFirstChunk) queueStreamingSpeech(event.text, true);
               if (!answerBody) answerBody = createMessage(event.role || cleanAssistantName(state.assistantName), "ollama");
               let answerHolder = answerBody.querySelector(".answer-text");
               if (!answerHolder) {
@@ -4652,6 +4731,10 @@ INDEX_HTML = r"""<!doctype html>
           }
         }
         applyResponseState({});
+        if (streamTtsEnabled) {
+          queueStreamingSpeech("", true);
+          await ttsQueue;
+        }
         if (answerBody) {
           finalizeBody(answerBody, answerText);
           addSpeakButton(answerBody, answerText);
@@ -4660,10 +4743,6 @@ INDEX_HTML = r"""<!doctype html>
         if (answerText) {
           lastAnswerText = answerText;
           readLastBtn.disabled = false;
-          if (voiceConversationActive && state.voiceAutoSend) {
-            step("Reading assistant response aloud");
-            await speakText(answerText);
-          }
           if (canvasRequested) {
             const mode = canvasModeFor(text);
             const canvasText = String(answerText || "").trim();
