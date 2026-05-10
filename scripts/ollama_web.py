@@ -953,6 +953,35 @@ def stats_to_dict(stats: ChatStats | None) -> dict[str, Any] | None:
     }
 
 
+def _live_search_answer(tool_text: str) -> str | None:
+    """Return a fast, grounded live-chat answer from raw search JSON."""
+    try:
+        results = json.loads(tool_text)
+    except json.JSONDecodeError:
+        if tool_text.lower().startswith("error:") or tool_text.strip() == "No results.":
+            return tool_text.strip()
+        return None
+    if not isinstance(results, list):
+        return None
+    items: list[str] = []
+    for item in results[:4]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        snippet = str(item.get("snippet") or "").strip()
+        if not title:
+            continue
+        detail = ""
+        if snippet:
+            detail = re.sub(r"\s+", " ", snippet)
+            detail = re.sub(r"\bSource:\s*", "", detail)
+            detail = re.sub(r";\s*Published:\s*", ", published ", detail)
+        items.append(f"{title}" + (f" ({detail})" if detail else ""))
+    if not items:
+        return "I searched, but I did not get usable results."
+    return "Here is what I found: " + " ".join(f"{idx}. {item}" for idx, item in enumerate(items, 1))
+
+
 def _markdown_fence(text: str, lang: str = "") -> str:
     body = str(text or "").replace("```", "'''").rstrip()
     return f"```{lang}\n{body}\n```"
@@ -1346,6 +1375,7 @@ def stream_chat_events(payload: dict[str, Any]):
             }
             return
 
+        low_latency_chat = not agent_mode and str(payload.get("chatMode") or "") == "live"
         tool_result = run_tool_command(text) if not images else None
         stream_messages = messages
         if tool_result:
@@ -1353,13 +1383,16 @@ def stream_chat_events(payload: dict[str, Any]):
             if tool_cmd:
                 yield {"type": "cmd", "command": tool_cmd}
             yield {"type": "tool", "role": tool_role, "text": tool_text, "command": tool_cmd}
+            if low_latency_chat and tool_cmd and tool_cmd.startswith("search:"):
+                answer_text = _live_search_answer(tool_text) or tool_text
+                yield {"type": "final", "text": answer_text, "role": assistant_name}
+                yield {"type": "done"}
+                return
             stream_messages = messages + [{"role": "system", "content": "Tool result:\n" + tool_text}]
 
         stats: ChatStats | None = None
         answer_text_parts: list[str] = []
         live_thinking_chunks = 0
-        # Always collect stats (cheap) so the client can update its context-window bar.
-        low_latency_chat = not agent_mode and str(payload.get("chatMode") or "") == "live"
         thinking_style_live_model = low_latency_chat and bool(re.search(r"(qwen|deepseek-r1|qwq|phi4-reasoning)", model, re.I))
         for chunk in stream_chat(
             model,

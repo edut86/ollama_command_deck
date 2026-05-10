@@ -723,7 +723,9 @@ def natural_search_query(user_text: str) -> str | None:
     web_terms = (
         "weather", "forecast", "temperature", "radar",
         "search", "look up", "lookup", "google",
-        "latest", "current", "today", "news",
+        "latest", "current", "today", "news", "headlines", "breaking",
+        "score", "scores", "who won", "game yesterday", "game today",
+        "when is", "when are", "where is", "what happened",
     )
     if not any(term in lowered for term in web_terms):
         return None

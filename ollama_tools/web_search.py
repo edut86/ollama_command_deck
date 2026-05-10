@@ -33,7 +33,7 @@ def search_web(query: str, count: int = 5) -> list[SearchResult]:
     if os.environ.get("DISABLE_DUCKDUCKGO_FALLBACK", "").lower() in {"1", "true", "yes"}:
         raise SearchConfigError("Set SEARXNG_URL or BRAVE_SEARCH_API_KEY to enable internet search.")
     if _is_news_query(query):
-        news_results = _search_google_news_rss(query, count)
+        news_results = _search_google_news_top(count) if _is_generic_news_query(query) else _search_google_news_rss(query, count)
         if news_results:
             return news_results
     return _search_duckduckgo_html(query, count)
@@ -72,6 +72,36 @@ def _is_news_query(query: str) -> bool:
     return any(word in lowered for word in ("news", "headline", "headlines", "breaking", "today"))
 
 
+def _is_generic_news_query(query: str) -> bool:
+    lowered = query.lower().strip(" ?!.")
+    generic = {
+        "news",
+        "the news",
+        "today news",
+        "news today",
+        "today's news",
+        "headlines",
+        "today's headlines",
+        "latest headlines",
+        "breaking news",
+        "what is the news",
+        "what's the news",
+        "what is the news today",
+        "what's the news today",
+    }
+    return lowered in generic
+
+
+def _search_google_news_top(count: int) -> list[SearchResult]:
+    request = urllib.request.Request(
+        "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        data = response.read()
+    return _parse_google_news_rss(data, count)
+
+
 def _search_google_news_rss(query: str, count: int) -> list[SearchResult]:
     params = urllib.parse.urlencode({"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"})
     request = urllib.request.Request(
@@ -80,7 +110,10 @@ def _search_google_news_rss(query: str, count: int) -> list[SearchResult]:
     )
     with urllib.request.urlopen(request, timeout=20) as response:
         data = response.read()
+    return _parse_google_news_rss(data, count)
 
+
+def _parse_google_news_rss(data: bytes, count: int) -> list[SearchResult]:
     root = ET.fromstring(data)
     results: list[SearchResult] = []
     for item in root.findall("./channel/item")[:count]:
