@@ -1124,10 +1124,7 @@ def chat_messages_from_payload(payload: dict[str, Any], text: str) -> list[dict[
     for item in history[-history_limit:]:
         if isinstance(item, dict) and item.get("role") in {"user", "assistant", "system"}:
             messages.append({"role": str(item["role"]), "content": str(item.get("content", ""))})
-    user_text = text
-    if chat_mode == "live" and re.search(r"(qwen|deepseek-r1|qwq|phi4-reasoning)", model, re.I):
-        user_text = "/no_think\n" + text
-    messages.append({"role": "user", "content": user_text})
+    messages.append({"role": "user", "content": text})
     return messages
 
 
@@ -1392,8 +1389,8 @@ def stream_chat_events(payload: dict[str, Any]):
         answer_text = "".join(answer_text_parts)
         if low_latency_chat and not answer_text and live_thinking_chunks:
             answer_text = (
-                "This model is spending the live turn in hidden reasoning instead of producing speech. "
-                "For conversation mode, switch to a faster chat model."
+                "I heard you, but this model did not return a spoken answer for that turn. "
+                "Try again or ask it more directly."
             )
         if answer_text:
             yield {

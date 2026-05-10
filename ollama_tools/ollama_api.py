@@ -104,7 +104,7 @@ def stream_chat(
     if options:
         payload["options"] = dict(options)
     if think is not None:
-        payload.setdefault("options", {})["think"] = bool(think)
+        payload["think"] = bool(think)
     elif _should_think(model):
         payload["options"] = {"think": True}
     headers = {"Content-Type": "application/json"}
