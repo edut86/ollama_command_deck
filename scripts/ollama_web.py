@@ -754,6 +754,7 @@ def save_session(payload: dict[str, Any]) -> dict[str, Any]:
         "chatMode": str(payload.get("chatMode") or existing.get("chatMode") or "default"),
         "personality": str(payload.get("personality") or existing.get("personality") or "default"),
         "agentProfile": normalize_agent_profile(str(payload.get("agentProfile") or existing.get("agentProfile") or "general")),
+        "autoProfile": bool(payload.get("autoProfile", existing.get("autoProfile", False))),
         "assistantName": _assistant_name(str(payload.get("assistantName") or existing.get("assistantName") or "Lilith")),
     }
     p.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1125,6 +1126,7 @@ def stream_chat_events(payload: dict[str, Any]):
     keep_alive = "30m" if bool(payload.get("keepAlive")) else None
     attachment: dict[str, Any] | None = payload.get("attachment") if isinstance(payload.get("attachment"), dict) else None
     requested_agent_profile = normalize_agent_profile(str(payload.get("agentProfile") or "general"))
+    auto_profile = bool(payload.get("autoProfile"))
     assistant_name = _assistant_name(str(payload.get("assistantName") or "Lilith"))
 
     # Resolve attachment — images auto-switch to a vision model
@@ -1216,7 +1218,7 @@ def stream_chat_events(payload: dict[str, Any]):
     if _canvas_op and agent_mode:
         agent_mode = False
 
-    context_selection = select_context(ROOT, requested_agent_profile, text)
+    context_selection = select_context(ROOT, requested_agent_profile, text, auto_route=auto_profile)
     if context_selection.routed:
         payload = dict(payload)
         payload["agentProfile"] = context_selection.active_profile
@@ -2571,6 +2573,10 @@ INDEX_HTML = r"""<!doctype html>
           <option value="frontend">Agent: Frontend</option>
           <option value="skill_creator">Agent: Skill Creator</option>
         </select>
+        <label class="check-control" title="Let Command Deck temporarily choose a better profile for each prompt. Your selected profile stays saved.">
+          <input id="autoProfile" type="checkbox">
+          <span>Auto profile</span>
+        </label>
         <select id="themeSelect" title="Theme">
           <option value="system">Theme: System</option>
           <option value="dark">Theme: Dark</option>
@@ -2704,6 +2710,8 @@ INDEX_HTML = r"""<!doctype html>
       voiceAutoSend: false,
       personality: "default",
       agentProfile: "general",
+      activeAgentProfile: "general",
+      autoProfile: false,
       assistantName: "Lilith",
       textZoom: 100,
       voicePauseDelay: 1800,
@@ -2720,6 +2728,7 @@ INDEX_HTML = r"""<!doctype html>
     const modeSelect = document.getElementById("modeSelect");
     const personality = document.getElementById("personality");
     const agentProfile = document.getElementById("agentProfile");
+    const autoProfile = document.getElementById("autoProfile");
     const keepAlive = document.getElementById("keepAlive");
     const assistantNameInput = document.getElementById("assistantNameInput");
     const assistantNameTitle = document.getElementById("assistantNameTitle");
@@ -2746,6 +2755,7 @@ INDEX_HTML = r"""<!doctype html>
         voiceAutoSend: Boolean(state.voiceAutoSend),
         personality: state.personality || "default",
         agentProfile: state.agentProfile || "general",
+        autoProfile: Boolean(state.autoProfile),
         assistantName: cleanAssistantName(state.assistantName),
         textZoom: Number(state.textZoom) || 100,
         voicePauseDelay: Math.max(800, Math.min(4000, Number(state.voicePauseDelay) || 1800)),
@@ -2777,6 +2787,8 @@ INDEX_HTML = r"""<!doctype html>
     themeSelect.addEventListener("change", () => applyTheme(themeSelect.value));
     personality.value = state.personality;
     agentProfile.value = state.agentProfile;
+    autoProfile.checked = Boolean(state.autoProfile);
+    state.activeAgentProfile = state.agentProfile || "general";
     assistantNameInput.value = cleanAssistantName(state.assistantName);
 
     function openAssistantNamePopover() {
@@ -3938,7 +3950,7 @@ INDEX_HTML = r"""<!doctype html>
             if (state.verbose) addCanvasChatMessage("step", event.command || "", "tool");
           } else if (event.type === "context") {
             if (event.profile) {
-              state.agentProfile = event.profile;
+              state.activeAgentProfile = event.profile;
               updateStatus();
             }
             if (state.verbose) addCanvasChatMessage("context", event.text || "", "tool");
@@ -4225,8 +4237,14 @@ INDEX_HTML = r"""<!doctype html>
       const modeKey = state.agentMode ? "agent" : (state.chatMode === "default" || state.chatMode === "conversation" ? "chat" : state.chatMode);
       document.getElementById("modeLabel").textContent = modeNames[modeKey] || modeKey;
       document.getElementById("personalityLabel").textContent = state.personality;
-      document.getElementById("agentProfileLabel").textContent = state.agentProfile;
+      const activeProfile = state.activeAgentProfile || state.agentProfile;
+      document.getElementById("agentProfileLabel").textContent = (
+        state.autoProfile && activeProfile !== state.agentProfile
+          ? `${state.agentProfile} -> ${activeProfile}`
+          : state.agentProfile
+      );
       agentProfile.value = state.agentProfile;
+      autoProfile.checked = Boolean(state.autoProfile);
       keepAlive.checked = Boolean(state.keepAlive);
       assistantNameInput.value = state.assistantName;
       assistantNameTitle.textContent = state.assistantName;
@@ -4338,6 +4356,7 @@ INDEX_HTML = r"""<!doctype html>
       }
       if (data.agentProfile) {
         state.agentProfile = data.agentProfile;
+        state.activeAgentProfile = data.agentProfile;
         agentProfile.value = data.agentProfile;
       }
       updateStatus();
@@ -4471,7 +4490,8 @@ INDEX_HTML = r"""<!doctype html>
         if (s.model) { state.model = s.model; modelSelect.value = s.model; }
         if (s.chatMode) state.chatMode = s.chatMode;
         if (s.personality) { state.personality = s.personality; document.getElementById("personality").value = s.personality; }
-        if (s.agentProfile) { state.agentProfile = s.agentProfile; agentProfile.value = s.agentProfile; }
+        if (s.agentProfile) { state.agentProfile = s.agentProfile; state.activeAgentProfile = s.agentProfile; agentProfile.value = s.agentProfile; }
+        if (typeof s.autoProfile === "boolean") state.autoProfile = s.autoProfile;
         if (s.assistantName) { state.assistantName = cleanAssistantName(s.assistantName); }
         if (typeof s.agentMode === "boolean") state.agentMode = s.agentMode;
         currentSessionId = s.id;
@@ -4531,6 +4551,7 @@ INDEX_HTML = r"""<!doctype html>
               chatMode: state.chatMode,
               personality: state.personality,
               agentProfile: state.agentProfile,
+              autoProfile: Boolean(state.autoProfile),
               assistantName: state.assistantName,
             }),
           });
@@ -4601,7 +4622,11 @@ INDEX_HTML = r"""<!doctype html>
       if (text === "/agent off") { state.agentMode = false; updateStatus(); }
       if (text.startsWith("/chat_mode ")) { state.chatMode = text.slice(11).trim() || state.chatMode; state.agentMode = false; updateStatus(); }
       if (text.startsWith("/chat_personality ")) state.personality = text.slice(18).trim() || state.personality;
-      if (text.startsWith("/agent_profile ")) { state.agentProfile = text.slice(15).trim() || state.agentProfile; updateStatus(); }
+      if (text.startsWith("/agent_profile ")) {
+        state.agentProfile = text.slice(15).trim() || state.agentProfile;
+        state.activeAgentProfile = state.agentProfile;
+        updateStatus();
+      }
       const displayText = text || (pendingAttachment ? `[${pendingAttachment.filename}]` : "");
       addMessage("You", displayText, "user");
       step("Preparing request");
@@ -4690,7 +4715,7 @@ INDEX_HTML = r"""<!doctype html>
             addMessage("cmd", event.command, "tool");
           } else if (event.type === "context") {
             if (event.profile) {
-              state.agentProfile = event.profile;
+              state.activeAgentProfile = event.profile;
               updateStatus();
             }
             addMessage("context", event.text || "", "context");
@@ -4815,7 +4840,16 @@ INDEX_HTML = r"""<!doctype html>
 
     modelSelect.addEventListener("change", () => { state.model = modelSelect.value; updateStatus(); refreshContextWindow(); });
     personality.addEventListener("change", () => { state.personality = personality.value; updateStatus(); });
-    agentProfile.addEventListener("change", () => { state.agentProfile = agentProfile.value; updateStatus(); });
+    agentProfile.addEventListener("change", () => {
+      state.agentProfile = agentProfile.value;
+      state.activeAgentProfile = agentProfile.value;
+      updateStatus();
+    });
+    autoProfile.addEventListener("change", () => {
+      state.autoProfile = autoProfile.checked;
+      state.activeAgentProfile = state.agentProfile;
+      updateStatus();
+    });
     keepAlive.addEventListener("change", () => { state.keepAlive = keepAlive.checked; updateStatus(); });
     assistantNameButton.addEventListener("click", (event) => {
       event.stopPropagation();

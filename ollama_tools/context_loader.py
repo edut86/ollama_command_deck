@@ -111,9 +111,18 @@ def route_agent_profile(agent_profile: str | None, user_text: str | None = None)
     return requested, ""
 
 
-def select_context(root: Path, agent_profile: str | None, user_text: str | None = None) -> ContextSelection:
+def select_context(
+    root: Path,
+    agent_profile: str | None,
+    user_text: str | None = None,
+    *,
+    auto_route: bool = True,
+) -> ContextSelection:
     requested = normalize_agent_profile(agent_profile)
-    active, reason = route_agent_profile(requested, user_text)
+    if auto_route:
+        active, reason = route_agent_profile(requested, user_text)
+    else:
+        active, reason = requested, ""
     paths = [
         item.path
         for item in load_context_items(root, active, user_text)

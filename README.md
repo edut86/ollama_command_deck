@@ -363,8 +363,8 @@ from the header controls. The selected name is used for the visible chat label
 and is injected into the web chat system prompt.
 
 The browser remembers the last-used web settings, including model, agent/chat
-mode, personality, agent profile, assistant name, verbose state, text zoom,
-keep-alive, GPU selection, and theme.
+mode, personality, agent profile, Auto Profile state, assistant name, verbose
+state, text zoom, keep-alive, GPU selection, and theme.
 
 During setup, **Require sign-in for the Web UI** can be turned off. This writes
 `[auth] enabled = false` and skips the login page after setup. Use this only on
@@ -374,11 +374,13 @@ Profile-scoped context lives under `context/`. The app injects only the context
 selected for the active profile and prompt, so writing/design/debug skills do
 not leak into normal ops answers or JSON automation responses.
 
-When the selected profile is `general`, the app can route obvious requests to a
-more specific profile. For example, Docker/SSH health checks route to `ops`,
-Home Assistant/MQTT prompts route to `home`, UI prompts route to `frontend`,
-implementation/test feedback-loop prompts route to `builder`, and terse/caveman prompts route to `brief`. The verbose pane shows the active
-profile and loaded context files for each request.
+The Web UI keeps the selected Agent profile pinned. If you want Command Deck to
+temporarily choose a better profile per prompt, enable **Auto profile** next to
+the Agent dropdown. With Auto Profile enabled, Docker/SSH health checks can route
+to `ops`, Home Assistant/MQTT prompts to `home`, UI prompts to `frontend`,
+implementation/test feedback-loop prompts to `builder`, and terse/caveman prompts
+to `brief`. The dropdown still keeps your saved selection; the status line and
+verbose pane show the temporary active profile for that request.
 
 Check routing and context selection without calling a model:
 

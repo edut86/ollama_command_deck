@@ -66,7 +66,9 @@ In Docker deploy mode, a missing work-directory setting falls back to
 Builder has a larger default tool budget than other profiles so it can inspect,
 patch, verify, debug failures, revise, and rerun before summarizing.
 
-When `general` is selected, obvious prompts are routed automatically:
+The Web TUI keeps the selected Agent profile pinned by default. Enable the
+**Auto profile** checkbox when you want obvious prompts to route temporarily to a
+more specific profile:
 
 | Prompt mentions | Routed profile |
 |---|---|
@@ -81,8 +83,9 @@ When `general` is selected, obvious prompts are routed automatically:
 | deep research, research report, detailed report, canvas report | `deep_research` |
 | search, latest, current docs | `research` |
 
-The verbose pane shows the active profile, route reason, and context files for
-each request.
+The dropdown remains the saved profile. The status line can show
+`selected -> active` while Auto Profile is enabled, and the verbose pane shows
+the active profile, route reason, and context files for each request.
 
 ## CLI
 
