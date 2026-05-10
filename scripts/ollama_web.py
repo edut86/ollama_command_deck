@@ -912,6 +912,16 @@ def build_system_prompt(
     mode = chat_mode if chat_mode in CHAT_MODES else "default"
     persona = personality if personality in CHAT_PERSONALITIES else "default"
     name = _assistant_name(assistant_name)
+    if mode == "live":
+        prompt = (
+            f"Your name is {name}. You are in low-latency live voice chat. "
+            "Keep replies natural, direct, and short: usually 1-3 sentences. "
+            "Do not narrate internal reasoning. Do not list capabilities for greetings or small talk. "
+            "If a tool result is provided, summarize only the useful answer conversationally."
+        )
+        if CHAT_PERSONALITIES[persona]:
+            prompt += "\n\n" + CHAT_PERSONALITIES[persona]
+        return prompt
     prompt = re.sub(r"Your name is Lilith\.", f"Your name is {name}.", SYSTEM_PROMPT, count=1)
     if name != "Lilith":
         prompt += f"\n\nThe user has renamed the assistant to {name}. Use that name for self-reference."
@@ -1088,6 +1098,7 @@ def handle_thunderbird_analyze(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def chat_messages_from_payload(payload: dict[str, Any], text: str) -> list[dict[str, str]]:
+    model = str(payload.get("model") or "")
     chat_mode = str(payload.get("chatMode") or "default")
     personality = str(payload.get("personality") or "default")
     agent_profile = normalize_agent_profile(str(payload.get("agentProfile") or "general"))
@@ -1109,10 +1120,14 @@ def chat_messages_from_payload(payload: dict[str, Any], text: str) -> list[dict[
                 "URLs with Markdown links when tool evidence provides them. Do not invent citations."
             )
         messages.append({"role": "system", "content": canvas_instruction})
-    for item in history[-30:]:
+    history_limit = 8 if chat_mode == "live" else 30
+    for item in history[-history_limit:]:
         if isinstance(item, dict) and item.get("role") in {"user", "assistant", "system"}:
             messages.append({"role": str(item["role"]), "content": str(item.get("content", ""))})
-    messages.append({"role": "user", "content": text})
+    user_text = text
+    if chat_mode == "live" and re.search(r"(qwen|deepseek-r1|qwq|phi4-reasoning)", model, re.I):
+        user_text = "/no_think\n" + text
+    messages.append({"role": "user", "content": user_text})
     return messages
 
 
@@ -1345,8 +1360,10 @@ def stream_chat_events(payload: dict[str, Any]):
 
         stats: ChatStats | None = None
         answer_text_parts: list[str] = []
+        live_thinking_chunks = 0
         # Always collect stats (cheap) so the client can update its context-window bar.
         low_latency_chat = not agent_mode and str(payload.get("chatMode") or "") == "live"
+        thinking_style_live_model = low_latency_chat and bool(re.search(r"(qwen|deepseek-r1|qwq|phi4-reasoning)", model, re.I))
         for chunk in stream_chat(
             model,
             stream_messages,
@@ -1355,11 +1372,16 @@ def stream_chat_events(payload: dict[str, Any]):
             base_url=ollama_base_url,
             keep_alive=keep_alive,
             think=False if low_latency_chat else None,
+            options={"num_predict": 96} if low_latency_chat else None,
         ):
             if isinstance(chunk, ChatStats):
                 stats = chunk
             elif isinstance(chunk, ThinkingChunk):
-                if verbose and not low_latency_chat:
+                if low_latency_chat:
+                    live_thinking_chunks += 1
+                    if thinking_style_live_model and live_thinking_chunks >= 32 and not answer_text_parts:
+                        break
+                elif verbose:
                     yield {"type": "thinking", "text": chunk.text}
             else:
                 chunk_text = str(chunk)
@@ -1368,6 +1390,11 @@ def stream_chat_events(payload: dict[str, Any]):
         if stats:
             yield {"type": "stats", "stats": stats_to_dict(stats)}
         answer_text = "".join(answer_text_parts)
+        if low_latency_chat and not answer_text and live_thinking_chunks:
+            answer_text = (
+                "This model is spending the live turn in hidden reasoning instead of producing speech. "
+                "For conversation mode, switch to a faster chat model."
+            )
         if answer_text:
             yield {
                 "type": "final",
