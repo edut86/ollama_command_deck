@@ -2927,6 +2927,7 @@ INDEX_HTML = r"""<!doctype html>
     let ttsQueue = Promise.resolve();
     let ttsQueueActive = false;
     let ttsQueueSerial = 0;
+    let ttsQueueCancelToken = 0;
     let lastAnswerText = "";
 
     // ── GPU selector ─────────────────────────────────────────────────────────
@@ -3017,6 +3018,7 @@ INDEX_HTML = r"""<!doctype html>
         state.chatMode = "conversation";
       } else {
         setVoiceConversationActive(false);
+        cancelTtsQueue();
         if (voiceIsRecording()) mediaRecorder.stop();
       }
       saveSettings();
@@ -3159,6 +3161,7 @@ INDEX_HTML = r"""<!doctype html>
       if (state.voiceAutoSend) {
         if (voiceConversationActive) {
           setVoiceConversationActive(false);
+          cancelTtsQueue();
           if (voiceIsRecording()) mediaRecorder.stop();
           addMessage("Tool", "Voice conversation mode stopped.", "tool");
         } else {
@@ -3233,6 +3236,13 @@ INDEX_HTML = r"""<!doctype html>
       if (activeAudioDone) { activeAudioDone(); activeAudioDone = null; }
       if (activeTtsBtn) { activeTtsBtn.classList.remove("speaking"); activeTtsBtn.textContent = "🔊"; }
       activeTtsBtn = null;
+    }
+
+    function cancelTtsQueue() {
+      ttsQueueCancelToken++;
+      ttsQueueActive = false;
+      ttsQueue = Promise.resolve();
+      stopTts();
     }
 
     // ── Markdown renderer ─────────────────────────────────────────────────────
@@ -4139,14 +4149,21 @@ INDEX_HTML = r"""<!doctype html>
       if (!cleaned) return ttsQueue;
       ttsQueueActive = true;
       const serial = ++ttsQueueSerial;
+      const cancelToken = ttsQueueCancelToken;
+      stopBtn.classList.add("active");
       const next = ttsQueue
         .catch(() => {})
         .then(() => {
-          if (!voiceConversationActive || !state.voiceAutoSend) return;
+          if (cancelToken !== ttsQueueCancelToken || !voiceConversationActive || !state.voiceAutoSend) return;
           return speakText(cleaned, null, {stopExisting: false, alreadyClean: true});
         })
         .catch(err => addMessage("Error", "TTS failed: " + err, "error"));
-      ttsQueue = next.finally(() => { if (ttsQueueSerial === serial) ttsQueueActive = false; });
+      ttsQueue = next.finally(() => {
+        if (ttsQueueSerial === serial) {
+          ttsQueueActive = false;
+          if (!currentController) stopBtn.classList.remove("active");
+        }
+      });
       return ttsQueue;
     }
 
@@ -4519,7 +4536,7 @@ INDEX_HTML = r"""<!doctype html>
     refreshSessionList();
 
     function setGenerating(on, label) {
-      stopBtn.classList.toggle("active", on);
+      stopBtn.classList.toggle("active", on || ttsQueueActive || Boolean(activeAudio));
       document.getElementById("send").disabled = on;
       const ind = document.getElementById("genIndicator");
       ind.classList.toggle("active", on);
@@ -4531,11 +4548,22 @@ INDEX_HTML = r"""<!doctype html>
       addMessage("step", message, "tool");
     }
 
-    stopBtn.addEventListener("click", () => {
+    function stopConversationActivity() {
+      setVoiceConversationActive(false);
+      if (voiceIsRecording()) {
+        try { mediaRecorder.stop(); } catch (_) {}
+      }
+      cancelTtsQueue();
       if (currentController) {
         currentController.abort();
         currentController = null;
       }
+      setGenerating(false);
+      updateMicUi();
+    }
+
+    stopBtn.addEventListener("click", () => {
+      stopConversationActivity();
     });
 
     async function sendMessage() {
