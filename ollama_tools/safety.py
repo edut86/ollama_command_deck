@@ -1,4 +1,9 @@
-"""Basic guardrails for local and remote shell command execution."""
+"""Basic guardrails for local and remote shell command execution.
+
+These checks reduce accidental damage, but they are not a sandbox or a security
+boundary. Commands still execute through a shell, so container isolation,
+restricted mounts, and disabled high-risk tools are the meaningful controls.
+"""
 
 from __future__ import annotations
 
@@ -51,6 +56,9 @@ BLOCKED_WORDS = {
     "sh",
     "zsh",
     "fish",
+    "tee",
+    "xargs",
+    "env",
     "crontab",
     "at",
     "systemctl",
@@ -67,6 +75,12 @@ BLOCKED_PATTERNS = [
     re.compile(r">\s*/etc/"),
     re.compile(r">>\s*/etc/"),
     re.compile(r">\s*/dev/"),
+    re.compile(r">>?\s*(?:~|\$HOME)?/?\.ssh/"),
+    re.compile(r">>?\s*(?:~|\$HOME)?/?\.(?:bashrc|bash_profile|profile|zshrc)"),
+    re.compile(r">>?\s*(?:~|\$HOME)?/?\.config/(?:systemd|autostart)/"),
+    re.compile(r">>?\s*/var/spool/cron/"),
+    re.compile(r"\bfind\b[^;\n]*\s-delete\b"),
+    re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*=[^;\n]+;\s*\$[A-Za-z_][A-Za-z0-9_]*\b"),
     re.compile(r"\beval\b"),                            # eval injection
     re.compile(r"\bexec\b"),                            # exec replacement
     re.compile(r"\$\("),                                # command substitution
@@ -82,7 +96,8 @@ def validate_command(command: str) -> None:
     """Reject commands that need privilege escalation or obvious destructive actions.
 
     In dangerous mode (`[paths] dangerous_mode = true`), only privilege-escalation
-    tokens and the fork-bomb pattern remain blocked.
+    tokens and the fork-bomb pattern remain blocked. This function is a safety
+    guardrail, not a complete shell policy engine.
     """
     if not command or not command.strip():
         raise UnsafeCommandError("Command is empty.")

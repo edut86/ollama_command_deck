@@ -100,7 +100,7 @@ Advanced manual setup:
         WEB_KEY_FILE: /config/tls/command-deck.key
     ```
 
-The wizard asks for an admin username/password, Ollama API URL and optional API key/token, a working directory (e.g. `/data/git/<your-project>` to start the agent inside one of your repos), and whether to enable local command, SSH, internet search, MCP tooling, and **dangerous mode** (lifts the work-directory sandbox and the destructive-command blocklist; privilege-escalation tokens — `sudo`, `su`, `doas`, `pkexec`, `passwd`, `visudo` — stay blocked).
+The wizard asks for an admin username/password, Ollama API URL and optional API key/token, a working directory (e.g. `/data/git/<your-project>` to start the agent inside one of your repos), and whether to enable local command, SSH, internet search, MCP tooling, and **dangerous mode** (lifts the work-directory sandbox and the destructive-command guardrails; privilege-escalation tokens — `sudo`, `su`, `doas`, `pkexec`, `passwd`, `visudo` — stay blocked).
 
 High-risk tools are disabled by default. The wizard warns that local commands, SSH, hooks, MCP tools, and writable workspaces can modify files or remote devices and may cause harm if misused.
 
@@ -112,7 +112,7 @@ If you change the host user later (different machine, different UID), rebuild wi
 
 #### Editing config later
 
-`/setup` can be reopened at any time. After first-run setup it asks for the existing user's credentials before unlocking the editor, then rewrites `config.toml` and rotates the session secret so all logged-in browsers must sign in again to pick up the new config. The lock screen also exposes a **forgot password — reset everything** button that wipes the user, all chat history, canvas files, and overrides, returning the install to first-run state.
+`/setup` can be reopened at any time. After first-run setup it asks for the existing user's credentials before unlocking the editor, then rewrites `config.toml` and rotates the session secret so all logged-in browsers must sign in again to pick up the new config. A reset call is allowed only before any user exists, or after a real signed session/setup-auth token is presented; it wipes the user, all chat history, canvas files, and overrides, returning the install to first-run state. If you truly forgot the password, reset from the Docker data/config volume on the host instead of using an unauthenticated web reset.
 
 The main UI shows a status banner with the current Ollama URL, enabled tools, and a red `⚠ DANGEROUS MODE` pill whenever dangerous mode is on.
 
@@ -739,7 +739,12 @@ Additional hardening:
 - TTS payload is capped at 32 KB
 - Chat-stream payload is capped at 20 MB (to accommodate image uploads)
 - Path traversal protection on `/write` — writes blocked outside the home directory
-- Shell command blocklist in `ollama_tools/safety.py` rejects dangerous patterns
+- Setup reset requires an existing session or a fresh setup-auth token when users exist
+- Login attempts are rate-limited per client address
+- Session cookies default to HTTPS-only (`cookie_secure = true`)
+- Shell command checks in `ollama_tools/safety.py` are guardrails against accidents, not a security boundary. Container isolation, restricted mounts, disabled dangerous mode, and disabled high-risk tools are the real boundary.
+
+Session cookies contain a signed, readable payload with username, role, and expiry. Do not add secrets to the session payload.
 
 ---
 

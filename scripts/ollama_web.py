@@ -15,10 +15,12 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
 import wave
 import ipaddress
+from collections import deque
 from dataclasses import asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -5053,6 +5055,9 @@ _SETUP_DONE_RUNTIME = False
 # Maps token -> (username, expires_epoch).
 _SETUP_TOKENS: dict[str, tuple[str, float]] = {}
 _SETUP_TOKEN_TTL = 600  # 10 minutes
+_LOGIN_ATTEMPTS: dict[str, deque[float]] = {}
+_LOGIN_THROTTLE_WINDOW = 300.0
+_LOGIN_THROTTLE_LIMIT = 10
 
 
 def _issue_setup_token(username: str) -> str:
@@ -5076,6 +5081,29 @@ def _consume_setup_token(token: str) -> str | None:
     if expires < _time.time():
         return None
     return username
+
+
+def _client_ip(handler: BaseHTTPRequestHandler) -> str:
+    forwarded = handler.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return handler.client_address[0] if handler.client_address else ""
+
+
+def _login_throttle(ip: str) -> float | None:
+    """Return seconds to wait, or None if this login attempt is allowed."""
+    now = time.time()
+    q = _LOGIN_ATTEMPTS.setdefault(ip, deque())
+    while q and now - q[0] > _LOGIN_THROTTLE_WINDOW:
+        q.popleft()
+    if len(q) >= _LOGIN_THROTTLE_LIMIT:
+        return max(1.0, _LOGIN_THROTTLE_WINDOW - (now - q[0]))
+    q.append(now)
+    return None
+
+
+def _clear_login_throttle(ip: str) -> None:
+    _LOGIN_ATTEMPTS.pop(ip, None)
 
 
 def _current_setup_config() -> dict:
@@ -5338,7 +5366,7 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
     };
     document.getElementById("confirmReset").onclick = async function(){
       msg.className = ""; msg.textContent = "Resetting…";
-      const r = await fetch("/api/setup-reset", {method:"POST"});
+      const r = await fetch("/api/setup-reset", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({auth_token: state.authToken || ""})});
       const d = await r.json().catch(()=>({}));
       if(!r.ok || !d.ok){ msg.className="err"; msg.textContent = d.error || "Reset failed."; return; }
       location.reload();
@@ -5610,6 +5638,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/setup-reset":
             try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}") if length else {}
+                if has_users():
+                    token = str(payload.get("auth_token") or "")
+                    session_user = verify_session(self._cookie("ollama_hooks_session"))
+                    if not (session_user or (token and _consume_setup_token(token))):
+                        self.respond_json({"ok": False, "error": "Re-authentication required."}, status=401)
+                        return
                 delete_all_users()
                 reset_runtime_state()
                 rotate_session_secret()
@@ -5696,12 +5732,26 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/auth/login":
             try:
+                ip = _client_ip(self)
+                retry_after = _login_throttle(ip)
+                if retry_after is not None:
+                    body = json.dumps({"ok": False, "error": "Too many login attempts. Try again later."}).encode("utf-8")
+                    self.send_response(429)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Retry-After", str(int(retry_after)))
+                    self._send_security_headers()
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 length = int(self.headers.get("Content-Length", "0"))
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
                 user = authenticate(str(payload.get("username") or ""), str(payload.get("password") or ""))
                 if not user:
+                    time.sleep(0.5)
                     self.respond_json({"ok": False, "error": "invalid login"}, status=401)
                     return
+                _clear_login_throttle(ip)
                 self.respond_json({"ok": True, "user": {"username": user.username, "role": user.role}}, cookie=create_session(user))
             except Exception as exc:
                 self.respond_json({"ok": False, "error": str(exc)}, status=400)

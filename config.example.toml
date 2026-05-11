@@ -12,7 +12,9 @@ enabled = true
 skip_login = false
 session_secret_file = "/config/session_secret"
 users_file = "/data/users.json"
-cookie_secure = false
+# Keep session cookies HTTPS-only by default. Set false only for intentional
+# plain-HTTP loopback/trusted-LAN testing.
+cookie_secure = true
 cookie_same_site = "Lax"
 session_ttl_hours = 24
 

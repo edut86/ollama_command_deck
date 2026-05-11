@@ -99,7 +99,7 @@ enabled = {str(auth_enabled).lower()}
 skip_login = {str(not auth_enabled).lower()}
 session_secret_file = {_quote(str(config_path.parent / "session_secret"))}
 users_file = {_quote(str(Path(data_dir) / "users.json"))}
-cookie_secure = false
+cookie_secure = true
 cookie_same_site = "Lax"
 session_ttl_hours = 24
 
