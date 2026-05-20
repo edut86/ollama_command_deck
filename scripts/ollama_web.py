@@ -984,6 +984,21 @@ def _live_search_answer(tool_text: str) -> str | None:
     return "Here is what I found: " + " ".join(f"{idx}. {item}" for idx, item in enumerate(items, 1))
 
 
+def _direct_tool_request(text: str, tool_cmd: str | None) -> bool:
+    """Return true when a deterministic tool result should bypass agent mode."""
+    lowered = text.lower().strip()
+    if lowered.startswith(("/local ", "/ssh ", "/search ", "/hosts")):
+        return True
+    if not tool_cmd:
+        return False
+    if tool_cmd.startswith("local:"):
+        return bool(
+            "local machine" in lowered
+            or re.search(r"\brun\s+(?:ls|cat|find|grep|head|tail|pwd|du|df)\b", lowered)
+        )
+    return False
+
+
 def _markdown_fence(text: str, lang: str = "") -> str:
     body = str(text or "").replace("```", "'''").rstrip()
     return f"```{lang}\n{body}\n```"
@@ -1312,6 +1327,22 @@ def stream_chat_events(payload: dict[str, Any]):
         messages = messages[:-1] + [canvas_ctx, messages[-1]]
     builder_log_path: Path | None = None
     try:
+        low_latency_chat = not agent_mode and str(payload.get("chatMode") or "") == "live"
+        pre_agent_tool_result = run_tool_command(text) if not images else None
+        if pre_agent_tool_result:
+            tool_role, tool_text, tool_cmd = pre_agent_tool_result
+            if _direct_tool_request(text, tool_cmd) or (low_latency_chat and tool_cmd and tool_cmd.startswith("search:")):
+                if tool_cmd:
+                    yield {"type": "cmd", "command": tool_cmd}
+                yield {"type": "tool", "role": tool_role, "text": tool_text, "command": tool_cmd}
+                if low_latency_chat and tool_cmd and tool_cmd.startswith("search:"):
+                    answer_text = _live_search_answer(tool_text) or tool_text
+                else:
+                    answer_text = tool_text
+                yield {"type": "final", "text": whitespace_columns_to_markdown(answer_text), "role": tool_role}
+                yield {"type": "done"}
+                return
+
         if not images and (text.startswith("/agent ") or (agent_mode and not text.startswith("/"))):
             agent_text = text[len("/agent "):].strip() if text.startswith("/agent ") else text
             agent_messages = messages[:-1] + [{"role": "user", "content": agent_text}]
@@ -1377,8 +1408,7 @@ def stream_chat_events(payload: dict[str, Any]):
             }
             return
 
-        low_latency_chat = not agent_mode and str(payload.get("chatMode") or "") == "live"
-        tool_result = run_tool_command(text) if not images else None
+        tool_result = pre_agent_tool_result
         stream_messages = messages
         if tool_result:
             tool_role, tool_text, tool_cmd = tool_result
@@ -1522,6 +1552,22 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
     messages.append({"role": "user", "content": text})
 
     try:
+        tool_result = run_tool_command(text)
+        commands: list[str] = []
+        if tool_result:
+            tool_role, tool_text, tool_cmd = tool_result
+            if _direct_tool_request(text, tool_cmd):
+                if tool_cmd:
+                    commands.append(tool_cmd)
+                return {
+                    "ok": True,
+                    "role": tool_role,
+                    "tool": {"role": tool_role, "text": tool_text, "command": tool_cmd},
+                    "commands": commands,
+                    "text": whitespace_columns_to_markdown(tool_text),
+                    "stats": None,
+                }
+
         if text.startswith("/agent ") or (agent_mode and not text.startswith("/")):
             if not is_langchain_available():
                 answer, stats = collect_chat(model, messages, verbose, keep_alive=keep_alive)
@@ -1554,8 +1600,6 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
                 "commands": commands,
             }
 
-        tool_result = run_tool_command(text)
-        commands: list[str] = []
         if tool_result:
             tool_role, tool_text, tool_cmd = tool_result
             if tool_cmd:
