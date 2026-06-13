@@ -5236,6 +5236,10 @@ button.ghost{border-color:#30363d;background:transparent;color:#9fb0c3;font-weig
 .ok{color:#7ee787}
 .hide{display:none}
 .muted{color:#7d8590;font-size:13px}
+.help{color:#7d8590;font-size:12px;margin:4px 0 0;line-height:1.45}
+.help code{background:#0d1117;padding:1px 4px;border-radius:3px}
+.note{border-left:4px solid #2f6feb;background:#0d1a2d;padding:10px 12px;margin:10px 0 4px;font-size:13px;line-height:1.5}
+.note code{background:#0d1117;padding:1px 4px;border-radius:3px}
 .actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
 hr{border:none;border-top:1px solid #21262d;margin:18px 0}
 </style>
@@ -5271,6 +5275,8 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
 <section id="editor" class="hide">
   <h2 id="editorTitle">Configuration</h2>
 
+  <p class="note" id="dockerPathNote">Paths on this page (like <code>/workspace</code> and <code>/data/.ssh/config</code>) are <b>inside the app's container</b>, not on your computer. The terminal setup (<code>./scripts/setup_docker_paths.sh</code>) already connected them to real folders on your computer. If you ran that and accepted the defaults, you can leave every path field below exactly as it is.</p>
+
   <div class="check"><input id="auth_enabled" type="checkbox" checked><span>Require sign-in for the Web UI. Turn this off only on a trusted LAN or behind another auth layer.</span></div>
 
   <div id="userBlock">
@@ -5288,8 +5294,9 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
   <p id="apiKeyHint" class="muted hide">Leave blank to keep the existing key. Type a new value to replace it.</p>
 
   <h2>Working directory</h2>
-  <label>Container working directory (commands run here unless dangerous mode is on)</label>
+  <label>Folder the AI works in</label>
   <input id="work_dir" value="/workspace">
+  <p class="help">This is the folder where the AI reads and writes files and runs commands. <code>/workspace</code> is the standard choice — the terminal setup linked it to the folder you chose on your computer. Leave it as <code>/workspace</code> unless you know you want a different in-container path.</p>
 
   <h2>Tools</h2>
   <div class="check"><input id="enable_local" type="checkbox"><span>Enable local command tools. High risk.</span></div>
@@ -5310,8 +5317,10 @@ hr{border:none;border-top:1px solid #21262d;margin:18px 0}
   <h2>Text-to-speech (optional)</h2>
   <label>Piper / Kokoro URL</label>
   <input id="piper_url" placeholder="http://piper:8880">
+  <p class="help">For offline voice. If you started Command Deck with <code>./scripts/deploy_web.sh</code>, the Piper voice server runs alongside it — enter <code>http://piper:8880</code>. Leave blank to use online Edge voices instead (needs internet).</p>
 
   <h2>SSH paths</h2>
+  <p class="help">Only matters if you enabled SSH tools above. These point at your SSH config <i>inside the container</i>. When the terminal setup linked your home folder to the container, <code>/data/.ssh/config</code> is the same file as <code>~/.ssh/config</code> on your computer. Leave both as-is unless you mounted SSH somewhere else.</p>
   <div class="row">
     <div><label>SSH config path</label><input id="ssh_config_path" value="/data/.ssh/config"></div>
     <div><label>known_hosts path</label><input id="ssh_known_hosts_path" value="/data/.ssh/known_hosts"></div>

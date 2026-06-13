@@ -7,7 +7,99 @@ license notes for upstream projects used by this app.
 
 ---
 
-## Quick Start
+## Easy Setup (never used Docker? start here)
+
+This is the simplest way to get the app running. You do **not** need to
+understand Docker. You'll run one setup command, answer a few questions (just
+press Enter to accept the recommended answer each time), then open a web page.
+
+> New to the words "Docker", "container", or "volume"? See the
+> [Plain-English glossary](#plain-english-glossary) at the end of this section.
+> Short version: Docker runs the app in a safe sandbox so it doesn't clutter
+> your computer, and "connecting a folder" just lets the app see files you choose.
+
+### Step 1 — Install Docker (one time)
+
+If you already have Docker, skip to Step 2. To check, open a terminal and run
+`docker --version`; if it prints a version number, you're set.
+
+- **Windows or Mac:** install **Docker Desktop** from
+  <https://www.docker.com/products/docker-desktop/>, then open it once so it's
+  running (you'll see a whale icon in your menu bar / system tray).
+- **Linux (Ubuntu/Debian):** install Docker Engine with
+  <https://docs.docker.com/engine/install/> (or `sudo apt install docker.io docker-compose-plugin`),
+  then add yourself to the docker group so you don't need `sudo`:
+  ```bash
+  sudo usermod -aG docker "$USER"   # log out and back in afterward
+  ```
+
+You also need an **Ollama** server running somewhere on your network (this app
+talks to it). Get it at <https://ollama.com>. It can be on this same computer
+(`http://localhost:11434`) or another machine.
+
+### Step 2 — Download the app and run setup
+
+```bash
+git clone https://github.com/<your-github-user>/ollama_command_deck.git
+cd ollama_command_deck
+./scripts/setup_docker_paths.sh
+```
+
+The setup command asks five short questions. Each one just decides which of
+**your** folders the app is allowed to see. The recommended answer is option `1`
+every time, so you can press **Enter** to accept it and move on:
+
+| The question | What it's really asking | Just press Enter to get |
+|---|---|---|
+| Who can open the web page? | Phone/tablet access, or this PC only | Anyone on your home network (with HTTPS) |
+| Where to keep the app's settings? | Where your config + login live | A folder inside the project (`./config-data`) |
+| What files should the AI read? | The AI's "home" folder | Your home folder — enables SSH + your files |
+| Which folder should the AI work in? | Where it edits files / runs commands | A fresh `./workspace` folder |
+| SSH to other machines? | Whether it can use your SSH keys | Yes, using the SSH setup in your home folder |
+
+At the end it offers to build and start the app — say **yes**. The first build
+downloads a fair amount and can take a few minutes.
+
+### Step 3 — Open it in your browser
+
+When it finishes it prints a web address. Open it:
+
+- On this computer: <https://localhost:8765>
+- From your phone/tablet: `https://<this-computer's-IP>:8765` (the setup
+  printout shows the address)
+
+Because the app uses a self-signed HTTPS certificate (needed so browsers allow
+the microphone), your browser shows a "not private / not trusted" warning the
+first time. That's expected for a local app — click **Advanced → proceed** to
+continue.
+
+A **setup page** loads in the browser. Create a username and password, paste
+your Ollama address, and pick which tools to enable. Any folder paths on that
+page (like `/workspace`) are already filled in correctly by Step 2 — just leave
+them as they are. Save, and you're running.
+
+### Plain-English glossary
+
+| Term | What it means here |
+|---|---|
+| **Docker** | A tool that runs the app in a self-contained sandbox so it doesn't install clutter directly on your system. |
+| **Container** | The running sandbox. It can only see the folders you connected during setup — nothing else on your computer. |
+| **Image** | The downloaded "template" Docker builds the container from. The first start builds it; later starts reuse it. |
+| **Host** | Your actual computer and its normal files. |
+| **Volume / bind mount** | A folder on your computer that you've connected so the container can see it. "Connecting your home folder" = the app can read files there. |
+| **Container path** | A path *inside* the sandbox, like `/workspace` or `/data/.ssh/config`. Setup links these to real folders on your computer, so you rarely type them yourself. |
+| **`localhost`** | "This computer." `https://localhost:8765` opens the app on the machine it's running on. |
+
+Want more control over folder locations, GPUs, SSH agents, or named volumes?
+The detailed reference below covers all of it.
+
+---
+
+## Setup Reference (all options)
+
+The [Easy Setup](#easy-setup-never-used-docker-start-here) above is enough for
+most people. This section is the fuller reference: every folder option, GPU
+support, SSH agents, named volumes, and manual Docker Compose edits.
 
 ### Docker Setup
 

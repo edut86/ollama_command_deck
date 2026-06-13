@@ -59,16 +59,34 @@ write_env_setting() {
   mv "$tmp" .env
 }
 
-echo "Ollama Command Deck Docker path setup"
-echo "This writes docker-compose.override.yml and can recreate the web container."
+cat <<'EOF'
+Ollama Command Deck — Docker setup
+==================================
+
+This sets up the app to run in Docker (a sandboxed container on your computer).
+The questions below just decide which real folders on your computer the app is
+allowed to see. You don't need to know Docker — the default answer (1) is the
+recommended choice for each question, so you can press Enter to accept it.
+
+Two words that come up:
+  - "your computer" = the host: the normal files and folders you already have.
+  - "the container"  = the sandbox the app runs inside. It only sees the folders
+                       you connect here.
+
+This writes a small settings file (docker-compose.override.yml) and can then
+build and start the app for you.
+
+EOF
 
 app_uid="$(id -u)"
 app_gid="$(id -g)"
 
+echo "Question 1 of 5 — Who can open the web page?"
+echo "  Pick LAN if you want to use it from your phone/tablet too."
 choose "Web access" \
-  "LAN access with HTTPS (recommended for phones/tablets and microphone)" \
-  "Localhost only (same machine only)" \
-  "Custom Docker port bind"
+  "Anyone on my home network (phones, tablets, other PCs) — recommended" \
+  "Only this computer" \
+  "Let me type a custom address/port"
 case "$CHOICE" in
   1)
     web_port="$(prompt_default "Web port" "8765")"
@@ -84,9 +102,14 @@ case "$CHOICE" in
 esac
 write_env_setting "COMMAND_DECK_WEB_PORT_BIND" "$web_port_bind"
 
-choose "Config storage (/config: generated config, API key file, session secret)" \
-  "Bind mount ./config-data (recommended)" \
-  "Docker named volume command-deck-config"
+echo
+echo "Question 2 of 5 — Where to keep the app's settings?"
+echo "  This holds your saved config, API key, and login secret."
+echo "  Option 1 keeps them in a folder you can see inside this project"
+echo "  (./config-data). Option 2 hides them in Docker-managed storage."
+choose "Settings storage" \
+  "Keep them in this project folder: ./config-data — recommended" \
+  "Let Docker store them out of sight (named volume)"
 case "$CHOICE" in
   1)
     config_path="$(prompt_default "Config bind path" "./config-data")"
@@ -98,11 +121,16 @@ case "$CHOICE" in
     ;;
 esac
 
-choose "Data / agent home (/data: sessions, canvas files, users, ~/.ssh)" \
-  "Bind mount current user's home (recommended for SSH and host files)" \
-  "Bind mount ./data" \
-  "Docker named volume command-deck-data" \
-  "Custom bind path"
+echo
+echo "Question 3 of 5 — What files should the AI be able to read?"
+echo "  This becomes the AI's home folder. Option 1 lets it use your real"
+echo "  home folder (${HOME}) — your SSH setup, projects, and configs."
+echo "  Choose a narrower option if you'd rather keep it walled off."
+choose "AI home folder" \
+  "My whole home folder: ${HOME} — recommended, enables SSH + your files" \
+  "A fresh empty folder in this project: ./data" \
+  "Docker-managed storage (named volume), can't see your files" \
+  "Let me type a specific folder"
 case "$CHOICE" in
   1)
     data_path="${HOME}"
@@ -124,10 +152,14 @@ case "$CHOICE" in
     ;;
 esac
 
-choose "Workspace (/workspace: default local-command working directory)" \
-  "Bind mount ./workspace" \
-  "Bind mount ~/git" \
-  "Custom bind path"
+echo
+echo "Question 4 of 5 — Which folder should the AI work inside?"
+echo "  When it runs commands or edits files, it does so here by default."
+echo "  Inside the app this folder is always called /workspace."
+choose "Work folder" \
+  "A fresh empty folder in this project: ./workspace — recommended" \
+  "My projects folder: ${HOME}/git (pick this if you write code there)" \
+  "Let me type a specific folder"
 case "$CHOICE" in
   1)
     workspace_path="./workspace"
@@ -142,11 +174,17 @@ esac
 ensure_bind_dir "$workspace_path"
 workspace_volume="$(yaml_quote "${workspace_path}:/workspace")"
 
+echo
+echo "Question 5 of 5 — Let the AI connect to other machines over SSH?"
+echo "  This decides whether the app can see your SSH keys (in ~/.ssh)."
+echo "  Your keys are NOT copied anywhere; the app just reads them in place."
+echo "  If you picked option 1 for the home folder above, option 1 here"
+echo "  already works. Pick 'No' if you don't use SSH."
 choose "SSH access" \
-  "Use /data/.ssh from the data mount (best when /data is your host home)" \
-  "Mount host ~/.ssh read-only, including keys" \
-  "Mount only host ~/.ssh/config and known_hosts read-only" \
-  "No extra SSH mount"
+  "Use the ~/.ssh that came with my home folder — recommended" \
+  "Share my ~/.ssh folder (keys included), read-only" \
+  "Share only my SSH config + known_hosts (no keys), read-only" \
+  "No — don't give the AI any SSH access"
 ssh_choice="$CHOICE"
 ssh_volumes=()
 ssh_agent_volume=""
@@ -294,14 +332,13 @@ fi
 
 cat <<EOF
 
-Wrote docker-compose.override.yml
-Wrote .env with Docker web port bind:
-  COMMAND_DECK_WEB_PORT_BIND=${web_port_bind}
+Saved your choices. (Files written: docker-compose.override.yml and .env)
 
-In the web setup wizard, use these in-container paths:
-  SSH config path:  /data/.ssh/config
-  known_hosts path: /data/.ssh/known_hosts
-  work directory:   /workspace
+Next, the app opens in your browser and shows a setup page. If it asks for the
+paths below, the values are already filled in correctly — just leave them:
+  Folder the AI works in: /workspace
+  SSH config path:        /data/.ssh/config
+  known_hosts path:       /data/.ssh/known_hosts
 EOF
 
 if (( ${#extra_hosts[@]} > 0 )); then
@@ -312,10 +349,13 @@ if (( ${#extra_hosts[@]} > 0 )); then
   done
 fi
 
-read -r -p "Rebuild/recreate web now with ./scripts/deploy_web.sh? [Y/n]: " run_now
+echo
+echo "Ready to build and start the app now? This can take a few minutes the"
+echo "first time while Docker downloads and builds everything."
+read -r -p "Build and start now? [Y/n]: " run_now
 run_now="${run_now:-Y}"
 if [[ "$run_now" =~ ^[Yy]$ ]]; then
   ./scripts/deploy_web.sh
 else
-  echo "Run ./scripts/deploy_web.sh when ready."
+  echo "No problem. When you're ready, run:  ./scripts/deploy_web.sh"
 fi
